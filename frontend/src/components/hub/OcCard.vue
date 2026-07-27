@@ -1,20 +1,48 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import type { Oc, Rarity } from '@/types/oc'
+import type { Oc } from '@/types/oc'
 
 const props = defineProps<{ oc: Oc }>()
 
+const tapeRotation = computed(() => [-6, -3, 4, 2, -4][(props.oc.avatarPalette - 1) % 5])
 
-const isFeatured = computed(() => Boolean(props.oc.emoji))
+const tapeStyle = computed(() => ({
+  '--tape-color': `var(--tape-${props.oc.avatarPalette})`,
+}))
+
+const placeholderStyle = computed(() => ({
+  background: `var(--avatar-${props.oc.avatarPalette}-bg)`,
+  color: `var(--avatar-${props.oc.avatarPalette}-fg)`,
+}))
 </script>
 
 <template>
-  <article class="oc-card" :class="`oc-card--${oc.rarity}`">
+  <router-link
+    :to="`/hub/oc/${oc.id}`"
+    class="oc-card"
+    :style="tapeStyle"
+  >
+    <span
+      class="oc-card__tape"
+      :style="{ transform: `translateX(-50%) rotate(${tapeRotation}deg)` }"
+      aria-hidden="true"
+    />
+
+    <span class="oc-card__punch" aria-hidden="true" />
+
     <div class="oc-card__art">
-      <div v-if="isFeatured" class="oc-card__illustration">
-        <span class="oc-card__emoji" aria-hidden="true">{{ oc.emoji }}</span>
-      </div>
-      <div v-else class="oc-card__placeholder" :class="`oc-card__placeholder--${oc.avatarPalette}`">
+      <img
+        v-if="oc.images[0]"
+        :src="oc.images[0]"
+        alt=""
+        class="oc-card__image"
+      />
+
+      <div
+        v-else
+        class="oc-card__placeholder"
+        :style="placeholderStyle"
+      >
         <svg viewBox="0 0 100 100" role="img" aria-label="Avatar placeholder">
           <circle cx="50" cy="38" r="18" class="placeholder-shape" />
           <path
@@ -23,96 +51,101 @@ const isFeatured = computed(() => Boolean(props.oc.emoji))
           />
         </svg>
       </div>
-      <div class="oc-card__sheen" aria-hidden="true" />
     </div>
 
     <footer class="oc-card__info">
       <h3 class="oc-card__name">{{ oc.name }}</h3>
-      <p class="oc-card__author">{{ oc.author }}</p>
+      <p class="oc-card__author">por {{ oc.author }}</p>
     </footer>
-  </article>
+  </router-link>
 </template>
 
 <style scoped>
 .oc-card {
-  --rarity-color: var(--rarity-comum);
+  --tape-color: var(--tape-1);
+
   position: relative;
+  display: block;
+  overflow: visible;
+
+  color: inherit;
+  text-decoration: none;
+
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.3);
   border-radius: var(--radius-md);
-  overflow: hidden;
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
   box-shadow: var(--shadow-card);
+
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+
   transition:
-    transform var(--transition-base),
-    border-color var(--transition-base);
-  isolation: isolate;
+    transform var(--transition-base, .3s ease),
+    opacity var(--transition-base, .3s ease),
+    box-shadow var(--transition-base, .3s ease);
 }
 
 .oc-card:hover {
-  transform: translateY(-4px);
-  border-color: var(--rarity-color);
+  transform: translateY(-7px) rotate(-0.9deg);
+
+  opacity: 1;
+  box-shadow:
+    0 10px 0 rgba(50, 40, 65, 0.05),
+    0 18px 30px 5px rgba(50, 32, 67, 0.32);
 }
 
-.oc-card::before {
-  content: '';
-  position: absolute;
-  inset: 0 0 auto 0;
-  height: 3px;
-  background: var(--rarity-color);
-}
 
-.oc-card__ribbon {
+.oc-card__tape,
+.oc-card__punch {
   position: absolute;
-  top: 10px;
-  right: -34px;
-  transform: rotate(40deg);
-  background: var(--rarity-color);
-  color: #0a0a0d;
-  font-family: var(--font-mono);
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  padding: 3px 40px;
   z-index: 2;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
+}
+
+.oc-card__tape {
+  top: -10px;
+  left: 50%;
+  width: 64px;
+  height: 22px;
+
+  background: var(--tape-color);
+  border-radius: 2px;
+  opacity: .85;
+
+  box-shadow: 0 2px 4px rgb(44 36 23 / .2);
+}
+
+.oc-card__punch {
+  top: 12px;
+  left: 12px;
+
+  width: 10px;
+  aspect-ratio: 1;
+
+  border-radius: 50%;
+  background: var(--color-bg);
+  box-shadow: inset 0 1px 2px rgb(44 36 23 / .35);
 }
 
 .oc-card__art {
-  position: relative;
   aspect-ratio: 4 / 3;
   overflow: hidden;
+  border-radius: var(--radius-md) var(--radius-md) 0 0;
 }
 
+.oc-card__image,
 .oc-card__placeholder {
   width: 100%;
   height: 100%;
+}
+
+.oc-card__image {
+  display: block;
+  object-fit: cover;
+}
+
+.oc-card__placeholder {
   display: grid;
   place-items: center;
-}
-
-.placeholder-shape {
-  fill: currentColor;
-}
-
-.oc-card__placeholder--1 {
-  background: var(--avatar-1-bg);
-  color: var(--avatar-1-fg);
-}
-.oc-card__placeholder--2 {
-  background: var(--avatar-2-bg);
-  color: var(--avatar-2-fg);
-}
-.oc-card__placeholder--3 {
-  background: var(--avatar-3-bg);
-  color: var(--avatar-3-fg);
-}
-.oc-card__placeholder--4 {
-  background: var(--avatar-4-bg);
-  color: var(--avatar-4-fg);
-}
-.oc-card__placeholder--5 {
-  background: var(--avatar-5-bg);
-  color: var(--avatar-5-fg);
 }
 
 .oc-card__placeholder svg {
@@ -120,56 +153,26 @@ const isFeatured = computed(() => Boolean(props.oc.emoji))
   height: 46%;
 }
 
-.oc-card__illustration {
-  width: 100%;
-  height: 100%;
-  display: grid;
-  place-items: center;
-  background: radial-gradient(circle at 50% 30%, #2c3a68 0%, #141824 75%);
-}
-
-.oc-card__emoji {
-  font-size: 68px;
-  filter: drop-shadow(0 6px 10px rgba(0, 0, 0, 0.4));
-}
-
-/* brilho "holográfico" que passa no hover, assinatura visual dos cards */
-.oc-card__sheen {
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(
-    115deg,
-    transparent 20%,
-    rgba(255, 255, 255, 0.16) 35%,
-    rgba(255, 255, 255, 0.02) 45%,
-    transparent 60%
-  );
-  transform: translateX(-120%);
-  transition: transform 650ms ease;
-  pointer-events: none;
-}
-
-.oc-card:hover .oc-card__sheen {
-  transform: translateX(120%);
+.placeholder-shape {
+  fill: currentColor;
 }
 
 .oc-card__info {
-  padding: 14px 16px 16px;
-  background: var(--color-surface);
+  padding: 16px 16px 18px;
   border-top: 1px solid var(--color-border-soft);
 }
 
 .oc-card__name {
-  font-size: 16px;
-  font-weight: 600;
+  margin: 0 0 2px;
+
+  font: 600 17px var(--font-display);
   color: var(--color-text);
-  margin-bottom: 2px;
 }
 
 .oc-card__author {
   margin: 0;
-  font-family: var(--font-mono);
-  font-size: 12px;
+
+  font: 18px/1 var(--font-hand);
   color: var(--color-text-muted);
 }
 </style>

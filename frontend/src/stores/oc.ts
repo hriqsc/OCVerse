@@ -1,39 +1,62 @@
 import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
 import { OcMockGenerator } from '@/mock/ocGenerator'
-import type { Oc } from '@/types/oc'
+import type { Oc, OcDraft, SearchMode } from '@/types/oc'
 
 export const useOcStore = defineStore('oc', () => {
   const items = ref<Oc[]>(OcMockGenerator.generateMany(20))
-  const searchTerm = ref('')
-  const selectedAuthor = ref('all')
 
-  const authors = computed(() => OcMockGenerator.authors())
+  // the term actually applied to the filter — only changes once the user confirms it (Enter)
+  const appliedTerm = ref('')
+  const searchMode = ref<SearchMode>('oc')
 
   const filteredItems = computed<Oc[]>(() => {
-    const term = searchTerm.value.trim().toLowerCase()
+    const term = appliedTerm.value.trim().toLowerCase()
+    if (term.length === 0) return items.value
     return items.value.filter((oc) => {
-      const matchesAuthor = selectedAuthor.value === 'all' || oc.author === selectedAuthor.value
-      const matchesTerm = term.length === 0 || oc.name.toLowerCase().includes(term)
-      return matchesAuthor && matchesTerm
+      const field = searchMode.value === 'oc' ? oc.name : oc.author
+      return field.toLowerCase().includes(term)
     })
   })
 
-  function setSearchTerm(term: string) {
-    searchTerm.value = term
+  /** Only called when the user confirms the search (Enter). */
+  function applySearch(term: string) {
+    appliedTerm.value = term
   }
 
-  function setSelectedAuthor(authorId: string) {
-    selectedAuthor.value = authorId
+  function setSearchMode(mode: SearchMode) {
+    searchMode.value = mode
+  }
+
+  function getById(id: string): Oc | undefined {
+    return items.value.find((oc) => oc.id === id)
+  }
+
+  function addOc(draft: OcDraft): Oc {
+    const oc: Oc = {
+      id: `oc-${Date.now()}`,
+      avatarPalette: (items.value.length % 5) + 1,
+      ...draft,
+    }
+    items.value = [oc, ...items.value]
+    return oc
+  }
+
+  function updateOc(id: string, draft: OcDraft) {
+    const index = items.value.findIndex((oc) => oc.id === id)
+    if (index === -1) return
+    items.value[index] = { ...items.value[index], ...draft }
   }
 
   return {
     items,
-    authors,
-    searchTerm,
-    selectedAuthor,
+    appliedTerm,
+    searchMode,
     filteredItems,
-    setSearchTerm,
-    setSelectedAuthor,
+    applySearch,
+    setSearchMode,
+    getById,
+    addOc,
+    updateOc,
   }
 })

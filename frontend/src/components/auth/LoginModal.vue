@@ -1,15 +1,19 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted, ref, watch } from 'vue'
 import { useAuthModalStore } from '@/stores/authModal'
+import { useUserStore } from '@/stores/user'
 
 const store = useAuthModalStore()
-const email = ref('')
+const userStore = useUserStore()
+const username = ref('')
 const password = ref('')
 
 function submit() {
-  // mock: sem backend ainda, só fecha o popup
+  // mock: no backend yet — use whatever comes before the @ as the display name
+  const name = username.value|| 'Usuário'
+  userStore.login(name)
   store.close()
-  email.value = ''
+  username.value = ''
   password.value = ''
 }
 
@@ -44,7 +48,7 @@ watch(
               :class="{ 'modal-card__tab--active': store.initialTab === 'login' }"
               @click="store.initialTab = 'login'"
             >
-              Logar
+              Entrar
             </button>
             <button
               type="button"
@@ -70,7 +74,7 @@ watch(
           <form class="modal-card__form" @submit.prevent="submit">
             <label class="modal-card__field">
               <span>E-mail</span>
-              <input v-model="email" type="email" required placeholder="voce@email.com" />
+              <input v-model="username" required placeholder="nickname" />
             </label>
             <label class="modal-card__field">
               <span>Senha</span>

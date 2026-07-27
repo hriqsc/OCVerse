@@ -3,11 +3,11 @@ import { useAuthModalStore } from '@/stores/authModal'
 /**
  * useAuthModal
  * ------------
- * Uso em qualquer componente/página, sem precisar importar o <LoginModal />
- * manualmente — ele já fica montado uma única vez no App.vue:
+ * Use it from any component/page, no need to import <LoginModal /> manually —
+ * it's already mounted once in App.vue:
  *
  *   const { openLogin, openRegister, closeAuthModal } = useAuthModal()
- *   openLogin() // abre o popup na aba de login
+ *   openLogin() // opens the popup on the login tab
  */
 export function useAuthModal() {
   const store = useAuthModalStore()

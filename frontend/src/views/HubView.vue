@@ -1,5 +1,7 @@
 <script setup lang="ts">
+import { useRouter } from 'vue-router'
 import { useOcStore } from '@/stores/oc'
+import { useUserStore } from '@/stores/user'
 import AppHeader from '@/components/layout/AppHeader.vue'
 import UploadButton from '@/components/hub/UploadButton.vue'
 import SearchBar from '@/components/hub/SearchBar.vue'
@@ -7,11 +9,16 @@ import OcGrid from '@/components/hub/OcGrid.vue'
 import { useAuthModal } from '@/composables/useAuthModal'
 
 const store = useOcStore()
+const userStore = useUserStore()
+const router = useRouter()
 const { openLogin } = useAuthModal()
 
 function handleUploadClick() {
-  // por enquanto o upload exige login — troque por navegação real quando existir a tela
-  openLogin()
+  if (userStore.isLoggedIn) {
+    router.push('/hub/upload')
+  } else {
+    openLogin()
+  }
 }
 </script>
 
@@ -37,6 +44,19 @@ function handleUploadClick() {
   display: flex;
   flex-direction: column;
   min-height: 100vh;
+  isolation: isolate;
+}
+
+.hub-page::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image: url('/background.jpg');
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  opacity: 0.15; /* ajuste esse valor até ficar do jeito que quiser */
+  z-index: -1;
 }
 
 .hub-page__toolbar {

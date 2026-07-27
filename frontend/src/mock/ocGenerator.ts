@@ -1,36 +1,16 @@
-import type { AuthorOption, Oc, Rarity } from '@/types/oc'
+import type { Oc } from '@/types/oc'
 
 /**
  * OcMockGenerator
  * ----------------
- * Gera dados falsos de OCs para popular o hub enquanto não existe backend.
- * Quando a API real estiver pronta, basta trocar o `ocStore` para consumi-la
- * em vez de `OcMockGenerator.generateMany`, sem tocar nos componentes.
+ * Generates fake OC data to fill the hub while there is no backend yet.
+ * Once a real API exists, just swap the calls inside `src/stores/oc.ts`
+ * for HTTP requests instead of `OcMockGenerator.generateMany` — the
+ * components don't need to change.
  */
-const FIRST_NAMES = [
-  'Luna',
-  'Kael',
-  'Nyx',
-  'Ravi',
-  'Sable',
-  'Mika',
-  'Thorne',
-  'Ivy',
-  'Zeph',
-  'Coral',
-  'Bruma',
-  'Ash',
-  'Vex',
-  'Suri',
-  'Onix',
-  'Pixel',
-  'Draco',
-  'Aurora',
-  'Bosque',
-  'Ember',
-]
-
-const AUTHORS = [
+const ESPECIES = ['Raposa', 'Lobo', 'Gato', 'Cervo', 'Dragão', 'Coelho', 'Corvo']
+const SEXOS = ['Masculino', 'Feminino', 'Não-binário']
+const AUTORES = [
   'Yasu',
   'Miojo_art',
   'Kotori',
@@ -38,29 +18,17 @@ const AUTHORS = [
   'Rhaya',
   'Notte',
   'Fennik',
-  'Ju.k',
-  'Vantablack',
   'Sopa_de_letrinhas',
 ]
-
-const RARITY_WEIGHTS: Array<[Rarity, number]> = [
-  ['comum', 0.45],
-  ['raro', 0.32],
-  ['epico', 0.18],
-  ['lendario', 0.05],
+const CARACTERISTICAS = [
+  'Tímido, gosta de café, colecionador de bottons',
+  'Extrovertido, toca violão, adora chuva',
+  'Beta, Nyuchi loyalist, Vtuber maker',
+  'Caseiro, cozinha bem, medo de altura',
+  'Curioso, gamer, dorme tarde',
 ]
 
-function pickRarity(random: () => number): Rarity {
-  const roll = random()
-  let acc = 0
-  for (const [rarity, weight] of RARITY_WEIGHTS) {
-    acc += weight
-    if (roll <= acc) return rarity
-  }
-  return 'comum'
-}
-
-/** PRNG simples com seed, para gerar sempre a mesma "massa de dados" em dev. */
+/** Simple seeded PRNG, so dev always sees the same "fake dataset". */
 function mulberry32(seed: number) {
   let a = seed
   return () => {
@@ -72,46 +40,42 @@ function mulberry32(seed: number) {
   }
 }
 
+function pick<T>(list: T[], random: () => number): T {
+  return list[Math.floor(random() * list.length)]
+}
+
 export class OcMockGenerator {
   private static readonly SEED = 2026
 
-  /** Um OC "fixo" com ilustração, igual ao card de destaque do layout original. */
-  static featured(): Oc {
-    return {
-      id: 'oc-featured-laranja',
-      name: 'Laranja',
-      author: 'Edylanches',
-      rarity: 'epico',
-      avatarPalette: 2,
-      emoji: '🦊',
-    }
-  }
-
   static generateOne(index: number, random: () => number): Oc {
-    // metade dos uploads simula fichas ainda sem nome/autor preenchido
-    // (igual ao placeholder "Nome do oc" / "Autor" do layout original)
+    // half of the entries simulate sheets not filled in yet
+    // (matches the "Nome do oc" / "Autor" placeholder from the original layout)
     const filled = random() > 0.5
-    const name = filled ? FIRST_NAMES[Math.floor(random() * FIRST_NAMES.length)] : 'Nome do oc'
-    const author = filled ? AUTHORS[Math.floor(random() * AUTHORS.length)] : 'Autor'
     return {
       id: `oc-${index}`,
-      name,
-      author,
-      rarity: pickRarity(random),
+      name: filled ? `OC ${index + 1}` : 'Nome do oc',
+      author: filled ? pick(AUTORES, random) : 'Autor',
+      especie: pick(ESPECIES, random),
+      sexo: pick(SEXOS, random),
+      altura: `${140 + Math.floor(random() * 60)}cm`,
+      caracteristicas: pick(CARACTERISTICAS, random),
+      descricao: '',
       avatarPalette: (index % 5) + 1,
+      images: ["https://picsum.photos/500","https://picsum.photos/600","https://picsum.photos/700","https://picsum.photos/800","https://picsum.photos/900"],
     }
   }
 
   static generateMany(count: number): Oc[] {
     const random = mulberry32(this.SEED)
-    const list: Oc[] = [this.featured()]
-    for (let i = 0; i < count - 1; i++) {
+    const list: Oc[] = []
+    for (let i = 0; i < count; i++) {
       list.push(this.generateOne(i, random))
     }
     return list
   }
+}
 
-  static authors(): AuthorOption[] {
-    return [{ id: 'all', name: 'Todos' }, ...AUTHORS.map((a) => ({ id: a, name: a }))]
-  }
+
+export function MockMagmaList(){
+ return ["https://magma.com/d/K0EgWkMUDz","https://magma.com/d/K0EgWkMUDz","https://magma.com/d/K0EgWkMUDz"]
 }

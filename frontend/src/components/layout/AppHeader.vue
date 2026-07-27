@@ -1,25 +1,32 @@
 <script setup lang="ts">
 import { useAuthModal } from '@/composables/useAuthModal'
+import { useUserStore } from '@/stores/user'
 
 const { openLogin, openRegister } = useAuthModal()
+const userStore = useUserStore()
 </script>
 
 <template>
   <header class="app-header">
     <div class="app-header__inner">
       <router-link to="/hub" class="brand">
-        <span class="brand__mark" aria-hidden="true">🥪</span>
+        <img src="/logo.svg" alt="OC Verse logo" class="brand__mark" />
         <span class="brand__text">
-          <span class="brand__name">Edylanches</span>
-          <span class="brand__tagline">Referências de OC</span>
+          <span class="brand__name">OC Verse</span>
         </span>
       </router-link>
 
       <nav class="app-header__actions" aria-label="Conta">
-        <button type="button" class="link-btn" @click="openLogin">Logar</button>
-        <button type="button" class="link-btn link-btn--accent" @click="openRegister">
-          Registrar
-        </button>
+        <template v-if="userStore.isLoggedIn">
+          <span class="app-header__user">{{ userStore.username }}</span>
+          <button type="button" class="link-btn" @click="userStore.logout()">Sair</button>
+        </template>
+        <template v-else>
+          <button type="button" class="link-btn" @click="openLogin">Entrar</button>
+          <button type="button" class="link-btn link-btn--accent" @click="openRegister">
+            Registrar
+          </button>
+        </template>
       </nav>
     </div>
   </header>
@@ -54,12 +61,7 @@ const { openLogin, openRegister } = useAuthModal()
 .brand__mark {
   width: 52px;
   height: 52px;
-  border-radius: var(--radius-md);
-  display: grid;
-  place-items: center;
-  font-size: 26px;
-  background: linear-gradient(155deg, var(--color-brand-soft), transparent 70%);
-  border: 1px solid var(--color-border);
+  display: block;
 }
 
 .brand__text {
@@ -77,11 +79,19 @@ const { openLogin, openRegister } = useAuthModal()
 }
 
 .brand__tagline {
-  font-family: var(--font-mono);
+  font-family: var(--font-body);
+  font-weight: 500;
   font-size: 12px;
   color: var(--color-text-muted);
   text-transform: uppercase;
   letter-spacing: 0.08em;
+}
+
+.app-header__user {
+  font-family: var(--font-hand);
+  font-size: 20px;
+  color: var(--color-brand-strong);
+  padding: 0 6px;
 }
 
 .app-header__actions {

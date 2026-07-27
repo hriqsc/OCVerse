@@ -3,7 +3,7 @@ import { defineStore } from 'pinia'
 
 export const useAuthModalStore = defineStore('authModal', () => {
   const isOpen = ref(false)
-  /** 'login' | 'registrar' — controla qual aba do popup abre primeiro */
+  /** 'login' | 'registrar' — controls which popup tab opens first */
   const initialTab = ref<'login' | 'registrar'>('login')
 
   function open(tab: 'login' | 'registrar' = 'login') {

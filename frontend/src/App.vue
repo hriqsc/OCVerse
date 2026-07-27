@@ -4,6 +4,6 @@ import LoginModal from '@/components/auth/LoginModal.vue'
 
 <template>
   <router-view />
-  <!-- Montado uma única vez: qualquer página chama useAuthModal().openLogin() para exibi-lo -->
+  <!-- Mounted once: any page calls useAuthModal().openLogin() to show it -->
   <LoginModal />
 </template>

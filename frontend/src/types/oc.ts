@@ -1,17 +1,27 @@
-export type Rarity = 'comum' | 'raro' | 'epico' | 'lendario'
+export type SearchMode = 'oc' | 'autor'
 
 export interface Oc {
   id: string
   name: string
   author: string
-  rarity: Rarity
-  /** paleta usada no avatar placeholder quando não há imageUrl */
+  especie: string
+  sexo: string
+  altura: string
+  caracteristicas: string
+  descricao: string
+  /** palette used for the placeholder avatar when there are no images */
   avatarPalette: number
-  imageUrl?: string
-  emoji?: string
+  /** up to 4 images for the sheet; the first one is the cover */
+  images: string[]
 }
 
-export interface AuthorOption {
-  id: string
+export interface OcDraft {
   name: string
+  author: string
+  especie: string
+  sexo: string
+  altura: string
+  caracteristicas: string
+  descricao: string
+  images: string[]
 }

@@ -4,7 +4,7 @@ const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes: [
     {
-      // localhost/ -> redireciona automaticamente para localhost/hub
+      // localhost/ -> automatically redirects to localhost/hub
       path: '/',
       redirect: '/hub',
     },
@@ -14,7 +14,17 @@ const router = createRouter({
       component: () => import('@/views/HubView.vue'),
     },
     {
-      // qualquer rota desconhecida também cai no hub
+      path: '/hub/upload',
+      name: 'oc-upload',
+      component: () => import('@/views/UploadView.vue'),
+    },
+    {
+      path: '/hub/oc/:id',
+      name: 'oc-detail',
+      component: () => import('@/views/OcDetailView.vue'),
+    },
+    {
+      // any unknown route also falls back to the hub
       path: '/:pathMatch(.*)*',
       redirect: '/hub',
     },
