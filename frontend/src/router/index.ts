@@ -24,6 +24,11 @@ const router = createRouter({
       component: () => import('@/views/OcDetailView.vue'),
     },
     {
+      path: '/magmas',
+      name: 'magmas',
+      component: () => import('@/views/MagmasView.vue'),
+    },
+    {
       // any unknown route also falls back to the hub
       path: '/:pathMatch(.*)*',
       redirect: '/hub',

@@ -1,28 +1,54 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import AppHeader from '@/components/layout/AppHeader.vue'
 import EditOcModal from '@/components/oc/EditOcModal.vue'
 import { useOcStore } from '@/stores/oc'
+import { useUserStore } from '@/stores/user'
 import type { OcDraft } from '@/types/oc'
 
 const route = useRoute()
 const store = useOcStore()
+const userStore = useUserStore()
 
 const oc = computed(() => store.getById(String(route.params.id)))
+
+// só é dono se estiver logado E o nickname bater com o autor do OC
+const isOwner = computed(() => {
+  if (!userStore.isLoggedIn || !oc.value) return false
+  return userStore.username?.trim().toLowerCase() === oc.value.author.trim().toLowerCase()
+})
 
 const activeIndex = ref(0)
 const isEditOpen = ref(false)
 
-function selectImage(index: number) {
-  activeIndex.value = index
-}
+const lightboxSrc = ref<string | null>(null)
 
 function handleSave(draft: OcDraft) {
-  if (!oc.value) return
+  if (!oc.value || !isOwner.value) return
   store.updateOc(oc.value.id, draft)
   activeIndex.value = 0
 }
+
+function openLightbox(src: string) {
+  lightboxSrc.value = src
+}
+
+function closeLightbox() {
+  lightboxSrc.value = null
+}
+
+function handleKeydown(event: KeyboardEvent) {
+  if (event.key === 'Escape') closeLightbox()
+}
+
+onMounted(() => {
+  window.addEventListener('keydown', handleKeydown)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('keydown', handleKeydown)
+})
 </script>
 
 <template>
@@ -33,12 +59,17 @@ function handleSave(draft: OcDraft) {
       <section class="hero">
         <div class="hero__gallery">
           <div class="hero__visual">
-            <img
-                v-if="oc.images[activeIndex]"
-                :src="oc.images[activeIndex]"
-                class="hero__visual-img"
-                @click="isLightboxOpen = true"
-            />
+            <template v-if="oc.images[activeIndex]">
+              <img
+                  :src="oc.images[activeIndex]"
+                  class="hero__visual-img"
+                  role="button"
+                  tabindex="0"
+                  aria-label="Ampliar imagem"
+                  @click="openLightbox(oc.images[activeIndex])"
+                  @keydown.enter="openLightbox(oc.images[activeIndex])"
+              />
+            </template>
             <div v-else class="hero__placeholder" :class="`hero__placeholder--${oc.avatarPalette}`">
               <svg viewBox="0 0 100 100" role="img" aria-label="Avatar placeholder">
                 <circle cx="50" cy="38" r="18" class="placeholder-shape" />
@@ -76,7 +107,7 @@ function handleSave(draft: OcDraft) {
             </div>
           </dl>
 
-          <div class="hero__actions">
+          <div v-if="isOwner" class="hero__actions">
             <button type="button" class="hero__edit" @click="isEditOpen = true">Editar</button>
           </div>
         </aside>
@@ -92,10 +123,15 @@ function handleSave(draft: OcDraft) {
 
         <div class="gallery-grid">
             <img
-            v-for="(src, index) in oc.images"
-            :key="src + index"
-            :src="src"
-            class="gallery-image"
+              v-for="(src, index) in oc.images"
+              :key="src + index"
+              :src="src"
+              class="gallery-image"
+              role="button"
+              tabindex="0"
+              aria-label="Ampliar imagem"
+              @click="openLightbox(src)"
+              @keydown.enter="openLightbox(src)"
             />
         </div>
         </section>
@@ -105,7 +141,27 @@ function handleSave(draft: OcDraft) {
       <p class="not-found">Essa ficha não foi encontrada.</p>
     </main>
 
-    <EditOcModal v-if="oc" v-model:open="isEditOpen" :oc="oc" @save="handleSave" />
+    <EditOcModal v-if="oc && isOwner" v-model:open="isEditOpen" :oc="oc" @save="handleSave" />
+
+    <Teleport to="body">
+      <div
+        v-if="lightboxSrc"
+        class="lightbox"
+        @click.self="closeLightbox"
+      >
+        <button
+          type="button"
+          class="lightbox__close"
+          aria-label="Fechar"
+          @click="closeLightbox"
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" />
+          </svg>
+        </button>
+        <img :src="lightboxSrc" class="lightbox__img" @click.stop />
+      </div>
+    </Teleport>
   </div>
 </template>
 
@@ -151,19 +207,35 @@ function handleSave(draft: OcDraft) {
 }
 
 .hero__visual {
-  aspect-ratio: 4 / 5;
-  max-height: 600px;
-  width: 100%;
-  margin: 0 auto;
-  overflow: hidden;
-  border-radius: var(--radius-lg);
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+
+  overflow: visible;
 }
 
 .hero__visual-img {
-  width: 100%;
-  height: 100%;
-  /* object-fit: contain; */
   display: block;
+
+  width: auto;
+  height: auto;
+
+  max-width: 100%;
+  max-height: 1200px;
+
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+
+  object-fit: contain;
+  cursor: pointer;
+  transition: border-color var(--transition-fast);
+}
+
+.hero__visual-img:hover,
+.hero__visual-img:focus-visible {
+  border-color: var(--color-brand);
+  outline: none;
 }
 
 .hero__placeholder {
@@ -312,13 +384,81 @@ function handleSave(draft: OcDraft) {
 }
 
 .gallery-image {
+  display: block;
   width: 32%;
   height: 100%;
   object-fit: cover;
   border-radius: var(--radius-md);
   border: 1px solid var(--color-border);
   box-shadow: var(--shadow-card);
-  transition: transform .15s ease;
+  cursor: pointer;
+  transition:
+    transform .15s ease,
+    border-color var(--transition-fast);
+}
+
+.gallery-image:hover,
+.gallery-image:focus-visible {
+  transform: translateY(-2px);
+  border-color: var(--color-brand);
+  outline: none;
+}
+
+/* ============================================================
+   LIGHTBOX
+============================================================ */
+
+.lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+
+  display: grid;
+  place-items: center;
+
+  background: rgba(3, 5, 12, .92);
+  backdrop-filter: blur(2px);
+  padding: 40px;
+}
+
+.lightbox__img {
+  max-width: 92vw;
+  max-height: 88vh;
+  object-fit: contain;
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-popover);
+}
+
+.lightbox__close {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+
+  background: var(--color-surface-alt);
+  border: 1px solid var(--color-border);
+  border-radius: 50%;
+  color: var(--color-text);
+  cursor: pointer;
+
+  transition:
+    background var(--transition-fast),
+    border-color var(--transition-fast);
+}
+
+.lightbox__close:hover {
+  background: var(--color-brand);
+  border-color: var(--color-brand);
+  color: white;
+}
+
+.lightbox__close svg {
+  width: 20px;
+  height: 20px;
 }
 
 @media (max-width: 860px) {

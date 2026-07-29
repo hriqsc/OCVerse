@@ -28,7 +28,12 @@ function handleUploadClick() {
 
     <div class="hub-page__toolbar">
       <div class="hub-page__toolbar-inner">
-        <UploadButton @click="handleUploadClick" />
+        <div class="hub-page__toolbar-actions">
+          <UploadButton @click="handleUploadClick" />
+          <RouterLink to="/magmas" class="btn hub-page__magmas-link">
+            Magmas
+          </RouterLink>
+        </div>
         <SearchBar />
       </div>
     </div>
@@ -73,6 +78,19 @@ function handleUploadClick() {
   justify-content: space-between;
   gap: 16px;
   flex-wrap: wrap;
+}
+
+.hub-page__toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.hub-page__magmas-link {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.6rem 1.4rem;
+  text-decoration: none;
 }
 
 .hub-page__content {
