@@ -10,8 +10,11 @@ use crate::{
     }, services::image::{update_images,MAX_IMAGES}
 };
 
-const MAX_QUERY_POSTS : u32 = 30;
+use serde::de::DeserializeOwned;
 
+const MAX_METADATA_BYTES: usize = 64 * 1024;
+const MAX_QUERY_POSTS : u32 = 30;
+const MAX_IMAGE_BYTES: usize = 10 * 1024 * 1024;
 //image path design = {user}/{oc_name}/{image_index}.{png}
 
 #[instrument(skip(state, payload), fields(user = %auth.user_name))]
@@ -19,65 +22,14 @@ const MAX_QUERY_POSTS : u32 = 30;
 pub async fn create_post(
     state: web::Data<AppState>,
     auth: AuthUser,
-    mut payload: Multipart,
+    payload: Multipart,
 ) -> Result<HttpResponse, ApiError> {
-    let mut metadata: Option<CreatePost> = None;
-    let mut images: Vec<Vec<u8>> = Vec::new();
+    
+    let (metadata, images): (CreatePost, Vec<Vec<u8>>) = parse_post_multipart(payload).await?;
 
-    while let Some(field) = payload.next().await {
-        let mut field = field.map_err(|e| {
-            error!(error = %e, "failed to read multipart field");
-            ApiError::BadRequest("invalid request".into())
-        })?;
-
-        let field_name = field.name().unwrap_or("").to_string();
-
-        match field_name.as_str() {
-            "metadados" => {
-                let mut bytes = Vec::new();
-                while let Some(chunk) = field.next().await {
-                    bytes.extend_from_slice(&chunk.map_err(|e| {
-                        error!(error = %e, "failed to read metadata field bytes");
-                        ApiError::BadRequest("invalid request".into())
-                    })?);
-                }
-
-                metadata = Some(
-                    serde_json::from_slice::<CreatePost>(&bytes).map_err(|e| {
-                        warn!(error = %e, "malformed metadata json received");
-                        ApiError::BadRequest("invalid request".into())
-                    })?
-                );
-            }
-
-            "images" => {
-                if images.len() >= MAX_IMAGES {
-                    warn!(count = images.len(), "too many images in request");
-                    return Err(ApiError::BadRequest("invalid request".into()));
-                }
-
-                let mut bytes = Vec::new();
-                while let Some(chunk) = field.next().await {
-                    let chunk = chunk.map_err(|e| {
-                        error!(error = %e, "failed to read image chunk");
-                        ApiError::BadRequest("invalid request".into())
-                    })?;
-                    bytes.extend_from_slice(&chunk);
-                }
-
-                images.push(bytes);
-            }
-
-            other => {
-                warn!(field = %other, "ignoring unknown multipart field");
-            }
-        }
+    if metadata.sex.len() > 1 {
+        return Err(ApiError::BadRequest("invalid request".into()));
     }
-
-    let metadata = metadata.ok_or_else(|| {
-        warn!("request missing required 'metadados' field");
-        ApiError::BadRequest("invalid request".into())
-    })?;
 
     if images.is_empty() {
         warn!("request contained no images");
@@ -91,9 +43,6 @@ pub async fn create_post(
         images
     ).await?;
 
-    if metadata.sex.len() > 1 {
-        return Err(ApiError::BadRequest("invalid request".into()));
-    }
 
     let post_id: i32 = sqlx::query_scalar(
         "INSERT INTO posts (oc_name, description, creator_user_name,specie, sex) VALUES ($1, $2, $3, $4, $5) RETURNING id"
@@ -121,83 +70,27 @@ pub async fn create_post(
 pub async fn update_post(
     state: web::Data<AppState>,
     auth: AuthUser,
-    mut payload: Multipart,
+    payload: Multipart,
 ) -> Result<HttpResponse, ApiError> {
-    let mut metadata: Option<EditPost> = None;
-    let mut images: Vec<Vec<u8>> = Vec::new();
 
- 
-    while let Some(field) = payload.next().await {
-        let mut field = field.map_err(|e| {
-            error!(error = %e, "failed to read multipart field");
-            ApiError::BadRequest("invalid request".into())
-        })?;
-
-        let field_name = field.name().unwrap_or("").to_string();
-
-        match field_name.as_str() {
-            "metadados" => {
-                let mut bytes = Vec::new();
-                while let Some(chunk) = field.next().await {
-                    bytes.extend_from_slice(&chunk.map_err(|e| {
-                        error!(error = %e, "failed to read metadata field bytes");
-                        ApiError::BadRequest("invalid request".into())
-                    })?);
-                }
-
-                metadata = Some(
-                    serde_json::from_slice::<EditPost>(&bytes).map_err(|e| {
-                        warn!(error = %e, "malformed metadata json received");
-                        ApiError::BadRequest("invalid request".into())
-                    })?
-                );
-            }
-
-            "images" => {
-                if images.len() >= MAX_IMAGES {
-                    warn!(count = images.len(), "too many images in request");
-                    return Err(ApiError::BadRequest("invalid request".into()));
-                }
-
-                let mut bytes = Vec::new();
-                while let Some(chunk) = field.next().await {
-                    let chunk = chunk.map_err(|e| {
-                        error!(error = %e, "failed to read image chunk");
-                        ApiError::BadRequest("invalid request".into())
-                    })?;
-                    bytes.extend_from_slice(&chunk);
-                }
-
-                images.push(bytes);
-            }
-
-            other => {
-                warn!(field = %other, "ignoring unknown multipart field");
-            }
-        }
-    }    
-
-    let metadata = metadata.ok_or_else(|| {
-        warn!("request missing required 'metadados' field");
-        ApiError::BadRequest("invalid request".into())
-    })?;
+    let (metadata, images): (EditPost, Vec<Vec<u8>>) = parse_post_multipart(payload).await?;
 
     //checks if the user is the creator of the post
-    let post_id: i32 = sqlx::query_scalar(
+    let post_id: Option<i32> = sqlx::query_scalar(
         "SELECT id FROM posts WHERE id = $1 AND creator_user_name = $2"
     )
         .bind(&metadata.id)
         .bind(&auth.user_name)
-        .fetch_one(&state.db)
+        .fetch_optional(&state.db)
         .await
         .map_err(|e| {
             error!(error = %e, "failed to check if user is creator of post");
             ApiError::Internal(Error::Other("internal server error".into()))
         })?;
-    
-    if post_id == 0 {
+
+    let Some(_post_id) = post_id else {
         return Err(ApiError::UnAuthorized("unauthorized".into()));
-    }
+    };
 
     if images.is_empty() {
         warn!("request contained no images");
@@ -235,6 +128,85 @@ pub async fn update_post(
 }
 
 
+async fn parse_post_multipart<T>(
+    mut payload: Multipart,
+) -> Result<(T, Vec<Vec<u8>>), ApiError>
+where
+    T: DeserializeOwned,
+{
+    let mut metadata: Option<T> = None;
+    let mut images: Vec<Vec<u8>> = Vec::new();
+
+    while let Some(field) = payload.next().await {
+        let mut field = field.map_err(|e| {
+            error!(error = %e, "failed to read multipart field");
+            ApiError::BadRequest("invalid request".into())
+        })?;
+
+        match field.name().unwrap_or("") {
+            "metadados" => {
+                let mut bytes = Vec::new();
+                while let Some(chunk) = field.next().await {
+                    let chunk = chunk.map_err(|e| {
+                        error!(error = %e, "failed to read metadata field bytes");
+                        ApiError::BadRequest("invalid request".into())
+                    })?;
+
+                    if bytes.len() + chunk.len() > MAX_METADATA_BYTES {
+                        warn!("metadata exceeds max allowed size");
+                        return Err(ApiError::BadRequest("invalid request".into()));
+                    }
+
+                    bytes.extend_from_slice(&chunk);
+                }
+
+                metadata = Some(
+                    serde_json::from_slice::<T>(&bytes).map_err(|e| {
+                        warn!(error = %e, "malformed metadata json received");
+                        ApiError::BadRequest("invalid request".into())
+                    })?
+                );
+            }
+            //will read through the chunks of data and build the images
+            "images" => {
+                if images.len() >= MAX_IMAGES {
+                    warn!(count = images.len(), "too many images in request");
+                    return Err(ApiError::BadRequest("invalid request".into()));
+                }
+
+                let mut bytes = Vec::new();
+                while let Some(chunk) = field.next().await {
+                    let chunk = chunk.map_err(|e| {
+                        error!(error = %e, "failed to read image chunk");
+                        ApiError::BadRequest("invalid request".into())
+                    })?;
+
+                    if bytes.len() + chunk.len() > MAX_IMAGE_BYTES {
+                        warn!("image exceeds max allowed size");
+                        return Err(ApiError::BadRequest("invalid request".into()));
+                    }
+
+                    bytes.extend_from_slice(&chunk);
+                }
+
+                images.push(bytes);
+            }
+
+            other => {
+                warn!(field = %other, "ignoring unknown multipart field");
+            }
+        }
+    }
+
+    let metadata = metadata.ok_or_else(|| {
+        warn!("request missing required 'metadados' field");
+        ApiError::BadRequest("invalid request".into())
+    })?;
+
+    Ok((metadata, images))
+}
+
+
 
 
 //===============================public api===============================
@@ -262,22 +234,27 @@ pub async fn query_posts(
         sqlx::query(
             "SELECT id, oc_name, creator_user_name FROM posts WHERE oc_name LIKE $1 LIMIT $2"
         )
-            .bind(format!("%{}%", &query))
+            .bind(format!("{}%", &query))
             .bind(MAX_QUERY_POSTS)
             .fetch_all(&state.db)
             .await
-            .unwrap_or_default()
+            .map_err(|e| {
+                error!(error = %e, "database error while querying posts");
+                ApiError::Internal(Error::Other("internal server error".into()))
+            })?
     }else{
         sqlx::query(
             "SELECT id, oc_name, creator_user_name FROM posts WHERE creator_user_name LIKE $1 LIMIT $2"
         )
-            .bind(format!("%{}%", &query))
+            .bind(format!("{}%", &query))
             .bind(MAX_QUERY_POSTS)
             .fetch_all(&state.db)
             .await
-            .unwrap_or_default()
+            .map_err(|e| {
+                error!(error = %e, "database error while querying posts");
+                ApiError::Internal(Error::Other("internal server error".into()))
+            })?
     };
-
 
     for post in posts {
         query_posts.push(PostMinified {
@@ -286,8 +263,6 @@ pub async fn query_posts(
             creator_user_name: post.get("creator_user_name")
         });
     }
-
-
 
     Ok(HttpResponse::Ok().json(serde_json::json!({
         "posts": query_posts,

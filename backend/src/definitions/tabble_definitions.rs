@@ -18,8 +18,16 @@ pub fn post_table_def() -> &'static str {
     )"
 }
 
+pub fn magma_table_def() -> &'static str {
+    "CREATE TABLE IF NOT EXISTS magmas(
+        id CHAR(20)EXT PRIMARY KEY,
+        created_at INTEGER NOT NULL
+    )"
+}
+
 pub async fn run_tables_defs(pool : &sqlx::Pool<sqlx::Sqlite>) -> Result<(), sqlx::Error> {
     sqlx::query(user_table_def()).execute(pool).await?;
     sqlx::query(post_table_def()).execute(pool).await?;
+    sqlx::query(magma_table_def()).execute(pool).await?;
     Ok(())
 }

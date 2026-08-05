@@ -1,6 +1,10 @@
 use jsonwebtoken::{DecodingKey, EncodingKey};
 use sqlx::SqlitePool;
-use crate::{definitions::tabble_definitions::run_tables_defs, error::Error};
+use crate::{
+    definitions::tabble_definitions::run_tables_defs,
+    error::Error,
+    shared::encrypt::fnv1a_hash
+};
 use argon2::{Argon2, Algorithm, Version, Params};
 use std::env;
 
@@ -10,7 +14,8 @@ pub struct AppState {
     pub argon2: Argon2<'static>,
     pub jwt_encoding_key: EncodingKey,
     pub jwt_decoding_key: DecodingKey,
-    pub image_repo_path: String
+    pub image_repo_path: String,
+    pub secret_code : u64
 }
 
 impl AppState {
@@ -30,12 +35,15 @@ impl AppState {
 
         run_tables_defs(&db).await?;
 
+        let secret_code = fnv1a_hash(env::var("SECRET_CODE")?.as_bytes());
+
         Ok(AppState {
             db,
             argon2: Argon2::new(Algorithm::Argon2id, Version::V0x13, params),
             jwt_encoding_key: EncodingKey::from_secret(jwt_secret.as_bytes()),
             jwt_decoding_key: DecodingKey::from_secret(jwt_secret.as_bytes()),
-            image_repo_path: env::var("image_repo_path")?
+            image_repo_path: env::var("image_repo_path")?,
+            secret_code
         })
     }
 }

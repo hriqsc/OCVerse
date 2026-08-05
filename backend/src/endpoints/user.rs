@@ -4,10 +4,8 @@ use tracing::{error, warn, info, instrument};
 use crate::{
     api_error::ApiError, appstate::AppState, error::Error, schemas::user::
             UserLogin, services::{
-                jwt::generate_access_token,
-                session::{
-                    new_session,
-                    validate_refresh_token
+                jwt::generate_access_token, session::{
+                    new_session, revoke_session, validate_refresh_token
                 }
             }
 };
@@ -175,6 +173,38 @@ pub async fn login_user(
 }
 
 
+#[instrument(skip(state, req))]
+#[post("/api/v1/user/logout")]
+pub async fn logout_user(
+    state: web::Data<AppState>,
+    req: actix_web::HttpRequest,
+) -> Result<HttpResponse, ApiError> {
+    if let Some(refresh_token_cookie) = req.cookie("refresh_token") {
+        revoke_session(&state, refresh_token_cookie.value())
+            .await
+            .map_err(|e| {
+                error!(error = %e, "failed to revoke session on logout");
+                ApiError::Internal(Error::Other("internal server error".into()))
+            })?;
+    }
+
+    // expire client cookie
+    let expired_cookie = Cookie::build("refresh_token", "")
+        .http_only(true)
+        .secure(true)
+        .same_site(SameSite::Strict)
+        .max_age(CookieDuration::seconds(0))
+        .path("/api/v1")
+        .finish();
+
+    info!("user logged out successfully");
+
+    Ok(HttpResponse::Ok()
+        .cookie(expired_cookie)
+        .finish())
+}
+
+
 
 #[instrument(skip(state, req))]
 #[post("/api/v1/user/refresh")]
@@ -182,17 +212,32 @@ pub async fn refresh_token(
     state: web::Data<AppState>,
     req: actix_web::HttpRequest,
 ) -> Result<HttpResponse, ApiError> {
-    let refresh_token = req.cookie("refresh_token")
+    let old_refresh_token = req.cookie("refresh_token")
         .ok_or_else(|| {
             warn!("refresh attempted without refresh_token cookie");
             ApiError::UnAuthorized("invalid request".into())
         })?;
 
-    let user_name = validate_refresh_token(&state, refresh_token.value())
+    let user_name = validate_refresh_token(&state, old_refresh_token.value())
         .await
         .map_err(|e| {
             warn!(error = %e, "invalid or expired refresh token");
             ApiError::UnAuthorized("invalid request".into())
+        })?;
+
+    // revoke old session and create a new one
+    revoke_session(&state, old_refresh_token.value())
+        .await
+        .map_err(|e| {
+            error!(error = %e, "failed to revoke old session during refresh");
+            ApiError::Internal(Error::Other("internal server error".into()))
+        })?;
+
+    let session = new_session(&state, &user_name)
+        .await
+        .map_err(|e| {
+            error!(error = %e, "failed to create new session during refresh");
+            ApiError::Internal(Error::Other("internal server error".into()))
         })?;
 
     let access_token = generate_access_token(&state, &user_name)
@@ -201,10 +246,24 @@ pub async fn refresh_token(
             ApiError::Internal(Error::Other("internal server error".into()))
         })?;
 
+    let refresh_cookie = Cookie::build("refresh_token", session.refresh_token.clone())
+        .http_only(true)
+        .secure(true)
+        .same_site(SameSite::Strict)
+        .max_age(CookieDuration::days(7))
+        .path("/api/v1")
+        .finish();
+
     info!(user_name = %user_name, "access token refreshed successfully");
 
-    Ok(HttpResponse::Ok().json(serde_json::json!({ "access_token": access_token })))
+    Ok(HttpResponse::Ok()
+        .cookie(refresh_cookie)
+        .json(serde_json::json!({ "access_token": access_token })))
 }
+
+
+
+
 
 //===============================public api===============================
 
