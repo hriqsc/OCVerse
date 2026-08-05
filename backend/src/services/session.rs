@@ -8,7 +8,7 @@ use crate::{
     appstate::AppState,
     error::Error,
     schemas::user::Session, 
-    services::encrypt::hash_token
+    shared::encrypt::hash_token
 };
 
 pub async fn new_session(state: &AppState, user_name: &String) -> Result<Session, Error> {

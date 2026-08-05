@@ -1,22 +1,18 @@
 use actix_multipart::Multipart;
-use actix_web::{post, web, HttpResponse};
+use actix_web::{HttpResponse, get, post, put, web};
 use futures_util::StreamExt;
-use tokio::io::AsyncWriteExt;
-use tracing::{error, warn, info, instrument};
+use sqlx::{Row, sqlite::SqliteRow};
+use tracing::{error, warn, instrument};
 
 use crate::{
-    api_error::ApiError, appstate::AppState, error::Error,
-    middleware::auth::AuthUser,
-    schemas::post::PostMetadata,
+    api_error::ApiError, appstate::AppState, error::Error, middleware::auth::AuthUser, schemas::{
+        post::{CreatePost, EditPost, PostMetadata, PostMinified}, query::{PostQuery, is_query_valid}
+    }, services::image::{update_images,MAX_IMAGES}
 };
 
-const MAX_IMAGES: usize = 4;
-const MAX_IMAGE_SIZE: usize = 10 * 1024 * 1024; // 10MB per image
-const ALLOWED_MIME: [(&str, &str); 3] = [
-    ("image/png", "png"),
-    ("image/jpeg", "jpg"),
-    ("image/webp", "webp"),
-];
+const MAX_QUERY_POSTS : u32 = 30;
+
+//image path design = {user}/{oc_name}/{image_index}.{png}
 
 #[instrument(skip(state, payload), fields(user = %auth.user_name))]
 #[post("/api/v1/post")]
@@ -25,8 +21,8 @@ pub async fn create_post(
     auth: AuthUser,
     mut payload: Multipart,
 ) -> Result<HttpResponse, ApiError> {
-    let mut metadata: Option<PostMetadata> = None;
-    let mut images: Vec<(Vec<u8>, &'static str)> = Vec::new();
+    let mut metadata: Option<CreatePost> = None;
+    let mut images: Vec<Vec<u8>> = Vec::new();
 
     while let Some(field) = payload.next().await {
         let mut field = field.map_err(|e| {
@@ -47,7 +43,7 @@ pub async fn create_post(
                 }
 
                 metadata = Some(
-                    serde_json::from_slice::<PostMetadata>(&bytes).map_err(|e| {
+                    serde_json::from_slice::<CreatePost>(&bytes).map_err(|e| {
                         warn!(error = %e, "malformed metadata json received");
                         ApiError::BadRequest("invalid request".into())
                     })?
@@ -60,17 +56,6 @@ pub async fn create_post(
                     return Err(ApiError::BadRequest("invalid request".into()));
                 }
 
-                let content_type = field.content_type().map(|m| m.to_string()).unwrap_or_default();
-
-                let ext = ALLOWED_MIME
-                    .iter()
-                    .find(|(mime, _)| *mime == content_type)
-                    .map(|(_, ext)| *ext)
-                    .ok_or_else(|| {
-                        warn!(content_type = %content_type, "rejected disallowed mime type");
-                        ApiError::BadRequest("invalid request".into())
-                    })?;
-
                 let mut bytes = Vec::new();
                 while let Some(chunk) = field.next().await {
                     let chunk = chunk.map_err(|e| {
@@ -78,14 +63,9 @@ pub async fn create_post(
                         ApiError::BadRequest("invalid request".into())
                     })?;
                     bytes.extend_from_slice(&chunk);
-
-                    if bytes.len() > MAX_IMAGE_SIZE {
-                        warn!(size = bytes.len(), "image exceeded max size");
-                        return Err(ApiError::BadRequest("invalid request".into()));
-                    }
                 }
 
-                images.push((bytes, ext));
+                images.push(bytes);
             }
 
             other => {
@@ -104,42 +84,25 @@ pub async fn create_post(
         return Err(ApiError::BadRequest("invalid request".into()));
     }
 
-    let safe_user = sanitize_path_segment(&auth.user_name)?;
-    let safe_oc_name = sanitize_path_segment(&metadata.oc_name)?;
+    let saved_paths : Vec<String> = update_images(
+        &auth.user_name,
+        &metadata.oc_name,
+        &state.image_repo_path,
+        images
+    ).await?;
 
-    let dir_path = format!("images/{}/{}", safe_user, safe_oc_name);
-
-    tokio::fs::create_dir_all(&dir_path).await.map_err(|e| {
-        error!(path = %dir_path, error = %e, "failed to create upload directory");
-        ApiError::Internal(Error::Other("internal server error".into()))
-    })?;
-
-    info!(path = %dir_path, "upload directory ready");
-
-    let mut saved_paths = Vec::new();
-
-    for (index, (bytes, ext)) in images.into_iter().enumerate() {
-        let file_path = format!("{}/{}.{}", dir_path, index, ext);
-
-        let mut file = tokio::fs::File::create(&file_path).await.map_err(|e| {
-            error!(path = %file_path, error = %e, "failed to create image file");
-            ApiError::Internal(Error::Other("internal server error".into()))
-        })?;
-
-        file.write_all(&bytes).await.map_err(|e| {
-            error!(path = %file_path, error = %e, "failed to write image file");
-            ApiError::Internal(Error::Other("internal server error".into()))
-        })?;
-
-        saved_paths.push(file_path);
+    if metadata.sex.len() > 1 {
+        return Err(ApiError::BadRequest("invalid request".into()));
     }
 
     let post_id: i32 = sqlx::query_scalar(
-        "INSERT INTO posts (oc_name, description, creator_name) VALUES ($1, $2, $3) RETURNING id"
+        "INSERT INTO posts (oc_name, description, creator_user_name,specie, sex) VALUES ($1, $2, $3, $4, $5) RETURNING id"
     )
         .bind(&metadata.oc_name)
         .bind(&metadata.description)
         .bind(&auth.user_name)
+        .bind(&metadata.specie)
+        .bind(&metadata.sex)
         .fetch_one(&state.db)
         .await
         .map_err(|e| {
@@ -147,25 +110,224 @@ pub async fn create_post(
             ApiError::Internal(Error::Other("internal server error".into()))
         })?;
 
-    info!(post_id, images = saved_paths.len(), "post created successfully");
-
     Ok(HttpResponse::Created().json(serde_json::json!({
         "id": post_id,
         "images": saved_paths
     })))
 }
 
-fn sanitize_path_segment(input: &str) -> Result<String, ApiError> {
-    let trimmed = input.trim();
+#[instrument(skip(state, payload), fields(user = %auth.user_name))]
+#[put("/api/v1/post")]
+pub async fn update_post(
+    state: web::Data<AppState>,
+    auth: AuthUser,
+    mut payload: Multipart,
+) -> Result<HttpResponse, ApiError> {
+    let mut metadata: Option<EditPost> = None;
+    let mut images: Vec<Vec<u8>> = Vec::new();
 
-    if trimmed.is_empty()
-        || trimmed.contains('/')
-        || trimmed.contains('\\')
-        || trimmed.contains("..")
-    {
-        warn!(value = %input, "rejected unsafe path segment");
+ 
+    while let Some(field) = payload.next().await {
+        let mut field = field.map_err(|e| {
+            error!(error = %e, "failed to read multipart field");
+            ApiError::BadRequest("invalid request".into())
+        })?;
+
+        let field_name = field.name().unwrap_or("").to_string();
+
+        match field_name.as_str() {
+            "metadados" => {
+                let mut bytes = Vec::new();
+                while let Some(chunk) = field.next().await {
+                    bytes.extend_from_slice(&chunk.map_err(|e| {
+                        error!(error = %e, "failed to read metadata field bytes");
+                        ApiError::BadRequest("invalid request".into())
+                    })?);
+                }
+
+                metadata = Some(
+                    serde_json::from_slice::<EditPost>(&bytes).map_err(|e| {
+                        warn!(error = %e, "malformed metadata json received");
+                        ApiError::BadRequest("invalid request".into())
+                    })?
+                );
+            }
+
+            "images" => {
+                if images.len() >= MAX_IMAGES {
+                    warn!(count = images.len(), "too many images in request");
+                    return Err(ApiError::BadRequest("invalid request".into()));
+                }
+
+                let mut bytes = Vec::new();
+                while let Some(chunk) = field.next().await {
+                    let chunk = chunk.map_err(|e| {
+                        error!(error = %e, "failed to read image chunk");
+                        ApiError::BadRequest("invalid request".into())
+                    })?;
+                    bytes.extend_from_slice(&chunk);
+                }
+
+                images.push(bytes);
+            }
+
+            other => {
+                warn!(field = %other, "ignoring unknown multipart field");
+            }
+        }
+    }    
+
+    let metadata = metadata.ok_or_else(|| {
+        warn!("request missing required 'metadados' field");
+        ApiError::BadRequest("invalid request".into())
+    })?;
+
+    //checks if the user is the creator of the post
+    let post_id: i32 = sqlx::query_scalar(
+        "SELECT id FROM posts WHERE id = $1 AND creator_user_name = $2"
+    )
+        .bind(&metadata.id)
+        .bind(&auth.user_name)
+        .fetch_one(&state.db)
+        .await
+        .map_err(|e| {
+            error!(error = %e, "failed to check if user is creator of post");
+            ApiError::Internal(Error::Other("internal server error".into()))
+        })?;
+    
+    if post_id == 0 {
+        return Err(ApiError::UnAuthorized("unauthorized".into()));
+    }
+
+    if images.is_empty() {
+        warn!("request contained no images");
         return Err(ApiError::BadRequest("invalid request".into()));
     }
 
-    Ok(trimmed.to_string())
+    let saved_paths : Vec<String> = update_images(
+        &auth.user_name,
+        &metadata.oc_name,
+        &state.image_repo_path,
+        images
+    ).await?;
+
+    sqlx::query(
+        "UPDATE posts SET oc_name = $1, description = $2, specie = $3, sex = $4 WHERE id = $5 AND creator_user_name = $6 RETURNING id"
+    )
+        .bind(&metadata.oc_name)
+        .bind(&metadata.description)
+        .bind(&metadata.specie)
+        .bind(&metadata.sex)
+        .bind(&metadata.id)
+        .bind(&auth.user_name)
+        .execute(&state.db)
+        .await
+        .map_err(|e| {
+            error!(error = %e, "failed to update post in database");
+            ApiError::Internal(Error::Other("internal server error".into()))
+        })?;
+
+
+    Ok(HttpResponse::Created().json(serde_json::json!({
+        "id": metadata.id,
+        "images": saved_paths
+    })))
+}
+
+
+
+
+//===============================public api===============================
+
+
+
+#[get("/api/v1/posts/{type}{query}")]
+pub async fn query_posts(
+    state: web::Data<AppState>,
+    query_params : web::Path<PostQuery>
+) -> Result<HttpResponse, ApiError> {
+    let query_params = query_params.into_inner();
+
+    let query : String = if is_query_valid(&query_params) {
+        query_params.query
+    } else {
+        "".into()
+    };
+
+    let mut query_posts : Vec<PostMinified> = Vec::new();
+
+    //if is searching by oc_name or creator_name
+    let posts : Vec<SqliteRow> = 
+    if query_params.query_type == "C"{
+        sqlx::query(
+            "SELECT id, oc_name, creator_user_name FROM posts WHERE oc_name LIKE $1 LIMIT $2"
+        )
+            .bind(format!("%{}%", &query))
+            .bind(MAX_QUERY_POSTS)
+            .fetch_all(&state.db)
+            .await
+            .unwrap_or_default()
+    }else{
+        sqlx::query(
+            "SELECT id, oc_name, creator_user_name FROM posts WHERE creator_user_name LIKE $1 LIMIT $2"
+        )
+            .bind(format!("%{}%", &query))
+            .bind(MAX_QUERY_POSTS)
+            .fetch_all(&state.db)
+            .await
+            .unwrap_or_default()
+    };
+
+
+    for post in posts {
+        query_posts.push(PostMinified {
+            id: post.get("id"),
+            oc_name: post.get("oc_name"),
+            creator_user_name: post.get("creator_user_name")
+        });
+    }
+
+
+
+    Ok(HttpResponse::Ok().json(serde_json::json!({
+        "posts": query_posts,
+        "total": query_posts.len()
+    })))
+}
+
+#[get("/api/v1/post")]
+pub async fn get_post(
+    state: web::Data<AppState>,
+    post_id : web::Path<String>
+) -> Result<HttpResponse, ApiError>{
+
+    let post_id = post_id.into_inner();
+
+    if post_id.is_empty() {
+        return Err(ApiError::BadRequest("invalid request".into()));
+    }
+
+    //if post_id is not numerical
+    if post_id.parse::<u32>().is_err() {
+        return Err(ApiError::BadRequest("invalid request".into()));
+    }
+
+    let post : Option<SqliteRow> = sqlx::query(
+        "SELECT id, creator_user_name, oc_name, description , specie, sex FROM posts WHERE id = $1"
+    )
+        .bind(post_id)
+        .fetch_optional(&state.db)
+        .await
+        .map_err(|e| {
+            error!(error = %e, "database error while fetching post metadata");
+            ApiError::Internal(Error::Other("internal server error".into()))
+        })?;
+
+
+    let post_metadata = match post{
+        Some(row) => PostMetadata::from_row(row, &state.image_repo_path).await?,
+        None => return Err(ApiError::NotFound("post not found".into()))
+    };
+    
+    Ok(HttpResponse::Ok().json(post_metadata))
 }
