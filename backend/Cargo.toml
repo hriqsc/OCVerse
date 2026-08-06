@@ -3,6 +3,13 @@ name = "backend"
 version = "0.1.0"
 edition = "2024"
 
+[profile.release]
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+strip = true
+incremental = false
+
 [dependencies]
 actix-web = "4.14.0"
 actix-multipart = "0.8.0"
