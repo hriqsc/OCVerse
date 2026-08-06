@@ -31,7 +31,7 @@ impl AppState {
 
         let jwt_secret = env::var("JWT_SECRET")?;
 
-        let db  = sqlx::sqlite::SqlitePool::connect(&env::var("DB_PATH")?).await?;
+        let db: sqlx::Pool<sqlx::Sqlite>  = sqlx::sqlite::SqlitePool::connect(&env::var("DB_PATH")?).await?;
 
         run_tables_defs(&db).await?;
 
@@ -42,7 +42,7 @@ impl AppState {
             argon2: Argon2::new(Algorithm::Argon2id, Version::V0x13, params),
             jwt_encoding_key: EncodingKey::from_secret(jwt_secret.as_bytes()),
             jwt_decoding_key: DecodingKey::from_secret(jwt_secret.as_bytes()),
-            image_repo_path: env::var("image_repo_path")?,
+            image_repo_path: env::var("IMAGE_REPO_PATH")?,
             secret_code
         })
     }
