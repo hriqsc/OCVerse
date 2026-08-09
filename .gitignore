@@ -71,3 +71,6 @@ __screenshots__/
 *.sqlite
 
 test_output.txt
+
+#wsl stuff
+*:Zone.Identifier
