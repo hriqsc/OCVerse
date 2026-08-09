@@ -65,3 +65,9 @@ __screenshots__/
 
 # Vite
 *.timestamp-*-*.mjs
+
+
+./data/*
+*.sqlite
+
+test_output.txt

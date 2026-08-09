@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct PostQuery{
+    #[serde(rename = "type")]
     pub query_type: String,
     pub query: String,
 }

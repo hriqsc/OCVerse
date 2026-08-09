@@ -27,7 +27,7 @@ pub async fn create_post(
     
     let (metadata, images): (CreatePost, Vec<Vec<u8>>) = parse_post_multipart(payload).await?;
 
-    if metadata.sex.len() > 1 {
+    if metadata.sex.len() != 1 {
         return Err(ApiError::BadRequest("invalid request".into()));
     }
 
@@ -144,7 +144,7 @@ where
         })?;
 
         match field.name().unwrap_or("") {
-            "metadados" => {
+            "metadata" => {
                 let mut bytes = Vec::new();
                 while let Some(chunk) = field.next().await {
                     let chunk = chunk.map_err(|e| {
@@ -199,7 +199,7 @@ where
     }
 
     let metadata = metadata.ok_or_else(|| {
-        warn!("request missing required 'metadados' field");
+        warn!("request missing required 'metadata' field");
         ApiError::BadRequest("invalid request".into())
     })?;
 
@@ -213,7 +213,7 @@ where
 
 
 
-#[get("/api/v1/posts/{type}{query}")]
+#[get("/api/v1/posts/{type}/{query}")]
 pub async fn query_posts(
     state: web::Data<AppState>,
     query_params : web::Path<PostQuery>
@@ -270,7 +270,7 @@ pub async fn query_posts(
     })))
 }
 
-#[get("/api/v1/post")]
+#[get("/api/v1/post/{id}")]
 pub async fn get_post(
     state: web::Data<AppState>,
     post_id : web::Path<String>

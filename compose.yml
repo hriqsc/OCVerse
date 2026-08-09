@@ -1,0 +1,21 @@
+services:
+  app:
+    image: debian:bookworm-slim
+    working_dir: /app
+    volumes:
+      - ./backend/target/release/backend:/app/backend:ro
+      - ./data/${DB_DIR}:/app/${DB_DIR}
+      - ./data/${IMAGE_REPO_PATH}:/app/${IMAGE_REPO_PATH}
+    entrypoint: ["/app/backend"]
+    env_file:
+      - .env
+    environment:
+      - RUST_BACKTRACE=full
+    ports:
+      - "${BACKEND_PORT}:${BACKEND_PORT}"
+    restart: unless-stopped
+    cpus: "0.5"
+    mem_limit: 512m
+    mem_reservation: 256m
+    memswap_limit: 512m
+    pids_limit: 100

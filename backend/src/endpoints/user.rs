@@ -120,12 +120,16 @@ pub async fn login_user(
             ApiError::Internal(Error::Other("internal server error".into()))
         })?;
     
-    let dummy_hash: PasswordHash<'_> = PasswordHash::new("hey dummy 0/").unwrap();
     let password_hash: String = match row {
         Some(row) => row.get("password_hash"),
         None => {
-            // fake verify to keep timing consistent with a real user lookup
-            let _ = state.argon2.verify_password(b"dummy", &dummy_hash);
+            // valid PHC-formatted dummy hash, computed once, just to keep
+            // verify_password's timing consistent with the real-user path
+            if let Ok(dummy_hash) = PasswordHash::new(
+                "$argon2id$v=19$m=8192,t=2,p=1$c29tZXNhbHQ$RdescudvJCsgt3ub+b+dWRWJTmaaJObG"
+            ) {
+                let _ = state.argon2.verify_password(b"dummy", &dummy_hash);
+            }
             warn!(user_name = %login_req.user_name, "login attempt for nonexistent user");
             return Err(ApiError::UnAuthorized("invalid credentials".into()));
         }

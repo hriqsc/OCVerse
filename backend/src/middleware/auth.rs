@@ -19,12 +19,12 @@ impl FromRequest for AuthUser {
 
         let token = match req.headers().get("Authorization").and_then(|h| h.to_str().ok()) {
             Some(h) if h.starts_with("Bearer ") => h.trim_start_matches("Bearer ").to_string(),
-            _ => return ready(Err(ApiError::UnAuthorized("Invalid Header".into()))),
+            _ => return ready(Err(ApiError::UnAuthorized("unauthorized".into()))),
         };
 
         match validate_access_token(state, &token) {
             Ok(claims) => ready(Ok(AuthUser { user_name: claims.sub })),
-            Err(_) => ready(Err(ApiError::UnAuthorized("Invalid Header".into()))),
+            Err(_) => ready(Err(ApiError::UnAuthorized("unauthorized".into()))),
         }
     }
 }

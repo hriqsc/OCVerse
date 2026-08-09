@@ -6,7 +6,7 @@ use crate::{api_error::ApiError, error::Error, shared::sanitization::sanitize_pa
 
 
 pub const MAX_IMAGES: usize = 6;
-pub const EXT : &str = ".png";
+pub const EXT : &str = "png";
 //image path design = image_repo_path/{user}/{oc_name}/{image_index}.{png}
 
 

@@ -13,16 +13,17 @@ mod services;
 mod middleware;
 mod shared;
 mod definitions;
+mod test;
 
 #[tokio::main]
 async fn main() {
     let port = env::var("BACKEND_PORT").unwrap_or_else(|_| "3000".to_string());
-    let address = format!("127.0.0.1:{}", port);
+    let address = format!("0.0.0.0:{}", port);
 
     let app_state = AppState::new().await.unwrap();
 
     let frontend_origin = env::var("FRONTEND_URL")
-        .unwrap_or_else(|_| "http://localhost:5173".to_string());
+        .unwrap_or_else(|_| "http://localhost:8080".to_string());
 
     loop{
         match run(&address,&app_state,&frontend_origin).await{

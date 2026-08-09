@@ -48,7 +48,7 @@ pub async fn validate_refresh_token(state: &AppState, refresh_token: &str) -> Re
 
     let row = sqlx::query(
         "SELECT user_name FROM sessions
-         WHERE refresh_token = $1 AND expires_at > NOW()"
+         WHERE refresh_token = $1 AND expires_at > CURRENT_TIMESTAMP"
     )
         .bind(&hashed)
         .fetch_optional(&state.db)
