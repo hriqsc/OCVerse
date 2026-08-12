@@ -1,32 +1,52 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+//OcDetailView.vue
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import AppHeader from '@/components/layout/AppHeader.vue'
 import EditOcModal from '@/components/oc/EditOcModal.vue'
 import { useOcStore } from '@/stores/oc'
 import { useUserStore } from '@/stores/user'
-import type { OcDraft } from '@/types/oc'
+import type { Oc, OcDraft } from '@/types/oc'
 
 const route = useRoute()
 const store = useOcStore()
 const userStore = useUserStore()
 
-const oc = computed(() => store.getById(String(route.params.id)))
+const oc = ref<Oc | undefined>(undefined)
+const isLoading = ref(true)
+
+async function loadOc() {
+  const id = Number(route.params.id)
+  if (Number.isNaN(id)) {
+    oc.value = undefined
+    isLoading.value = false
+    return
+  }
+  isLoading.value = true
+  oc.value = await store.getById(id)
+  isLoading.value = false
+}
+
+onMounted(loadOc)
+watch(() => route.params.id, loadOc)
+
+// the backend doesn't send an avatarPalette, so derive a stable 1-5 value
+// from the OC's id, same as OcCard
+const avatarPalette = computed(() => (oc.value ? (oc.value.id % 5) + 1 : 1))
 
 // só é dono se estiver logado E o nickname bater com o autor do OC
 const isOwner = computed(() => {
   if (!userStore.isLoggedIn || !oc.value) return false
-  return userStore.username?.trim().toLowerCase() === oc.value.author.trim().toLowerCase()
+  return userStore.username?.trim().toLowerCase() === oc.value.creator_user_name.trim().toLowerCase()
 })
 
 const activeIndex = ref(0)
 const isEditOpen = ref(false)
 
 const lightboxSrc = ref<string | null>(null)
-
-function handleSave(draft: OcDraft) {
-  if (!oc.value || !isOwner.value) return
-  store.updateOc(oc.value.id, draft)
+async function handleSaved() {
+  if (!oc.value) return
+  oc.value = await store.getById(oc.value.id, true)
   activeIndex.value = 0
 }
 
@@ -55,22 +75,26 @@ onUnmounted(() => {
   <div class="detail-page">
     <AppHeader />
 
-    <main v-if="oc" class="detail-page__content">
+    <main v-if="isLoading" class="detail-page__content">
+      <p class="not-found">Carregando...</p>
+    </main>
+
+    <main v-else-if="oc" class="detail-page__content">
       <section class="hero">
         <div class="hero__gallery">
           <div class="hero__visual">
             <template v-if="oc.images[activeIndex]">
               <img
-                  :src="oc.images[activeIndex]"
+                  :src="oc.images[activeIndex]!.url"
                   class="hero__visual-img"
                   role="button"
                   tabindex="0"
                   aria-label="Ampliar imagem"
-                  @click="openLightbox(oc.images[activeIndex])"
-                  @keydown.enter="openLightbox(oc.images[activeIndex])"
+                  @click="openLightbox(oc.images[activeIndex]!.url)"
+                  @keydown.enter="openLightbox(oc.images[activeIndex]!.url)"
               />
             </template>
-            <div v-else class="hero__placeholder" :class="`hero__placeholder--${oc.avatarPalette}`">
+            <div v-else class="hero__placeholder" :class="`hero__placeholder--${avatarPalette}`">
               <svg viewBox="0 0 100 100" role="img" aria-label="Avatar placeholder">
                 <circle cx="50" cy="38" r="18" class="placeholder-shape" />
                 <path d="M14 100c0-24 16-38 36-38s36 14 36 38" class="placeholder-shape" />
@@ -80,30 +104,26 @@ onUnmounted(() => {
         </div>
 
         <aside class="hero__info">
-          <h1 class="hero__name">{{ oc.name }}</h1>
-          <p class="hero__author">por {{ oc.author }}</p>
+          <h1 class="hero__name">{{ oc.oc_name }}</h1>
+          <p class="hero__author">por {{ oc.creator_user_name }}</p>
           <div class="hero__divider" />
 
           <dl class="hero__facts">
             <div class="hero__fact">
               <dt>Espécie:</dt>
-              <dd>{{ oc.especie || '—' }}</dd>
+              <dd>{{ oc.specie || '—' }}</dd>
             </div>
             <div class="hero__fact">
               <dt>Sexo:</dt>
-              <dd>{{ oc.sexo || '—' }}</dd>
+              <dd>{{ oc.sex || '—' }}</dd>
             </div>
             <div class="hero__fact">
               <dt>Altura:</dt>
-              <dd>{{ oc.altura || '—' }}</dd>
-            </div>
-            <div class="hero__fact">
-              <dt>Características:</dt>
-              <dd>{{ oc.caracteristicas || '—' }}</dd>
+              <dd>{{ oc.height || '—' }}</dd>
             </div>
             <div class="hero__fact hero__fact--block">
               <dt>Descrição:</dt>
-              <dd>{{ oc.descricao || 'Sem descrição.' }}</dd>
+              <dd>{{ oc.description || 'Sem descrição.' }}</dd>
             </div>
           </dl>
 
@@ -123,15 +143,15 @@ onUnmounted(() => {
 
         <div class="gallery-grid">
             <img
-              v-for="(src, index) in oc.images"
-              :key="src + index"
-              :src="src"
-              class="gallery-image"
-              role="button"
-              tabindex="0"
-              aria-label="Ampliar imagem"
-              @click="openLightbox(src)"
-              @keydown.enter="openLightbox(src)"
+            v-for="(image, index) in oc.images"
+            :key="image.url + index"
+            :src="image.url"
+            class="gallery-image"
+            role="button"
+            tabindex="0"
+            aria-label="Ampliar imagem"
+            @click="openLightbox(image.url)"
+            @keydown.enter="openLightbox(image.url)"
             />
         </div>
         </section>
@@ -141,7 +161,7 @@ onUnmounted(() => {
       <p class="not-found">Essa ficha não foi encontrada.</p>
     </main>
 
-    <EditOcModal v-if="oc && isOwner" v-model:open="isEditOpen" :oc="oc" @save="handleSave" />
+    <EditOcModal v-if="oc && isOwner" v-model:open="isEditOpen" :oc="oc" @saved="handleSaved" />
 
     <Teleport to="body">
       <div

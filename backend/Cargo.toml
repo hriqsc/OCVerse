@@ -34,3 +34,4 @@ futures-util = "0.3.33"
 uuid = { version = "1.24.0", features = ["v4"] }
 anyhow = "1.0.103"
 dotenvy = "0.15"
+futures = "0.3.34"

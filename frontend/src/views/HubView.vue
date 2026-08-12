@@ -39,7 +39,7 @@ function handleUploadClick() {
     </div>
 
     <main class="hub-page__content">
-      <OcGrid :items="store.filteredItems" />
+      <OcGrid :items="store.minified" />
     </main>
   </div>
 </template>
@@ -60,7 +60,7 @@ function handleUploadClick() {
   background-size: cover;
   background-position: center;
   background-repeat: no-repeat;
-  opacity: 0.15; /* ajuste esse valor até ficar do jeito que quiser */
+  opacity: 0.15;
   z-index: -1;
 }
 

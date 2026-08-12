@@ -1,25 +1,35 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { onUnmounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import AppHeader from '@/components/layout/AppHeader.vue'
 import { useOcStore } from '@/stores/oc'
 import { useUserStore } from '@/stores/user'
+import { useHeightMask } from '@/composables/useHeightMask'
 
 const router = useRouter()
 const store = useOcStore()
 const userStore = useUserStore()
 
 const name = ref('')
-const author = ref(userStore.username ?? '')
-const especie = ref('')
-const sexo = ref('')
-const altura = ref('')
-const caracteristicas = ref('')
-const descricao = ref('')
-const images = ref<string[]>([])
+const specie = ref('')
+const sex = ref('')
+const height = useHeightMask()
+const description = ref('')
 const fileInput = ref<HTMLInputElement>()
+const errorMessages = ref<string[]>([])
 
 const MAX_IMAGES = 4
+
+interface ImageTile {
+  url: string
+  file: File
+}
+const imageTiles = ref<ImageTile[]>([])
+
+function revokeImageUrls() {
+  imageTiles.value.forEach((tile) => URL.revokeObjectURL(tile.url))
+}
+onUnmounted(revokeImageUrls)
 
 function triggerFilePicker() {
   fileInput.value?.click()
@@ -28,31 +38,39 @@ function triggerFilePicker() {
 function handleFiles(event: Event) {
   const files = (event.target as HTMLInputElement).files
   if (!files) return
-  const remaining = MAX_IMAGES - images.value.length
+  const remaining = MAX_IMAGES - imageTiles.value.length
   Array.from(files)
     .slice(0, remaining)
     .forEach((file) => {
-      images.value.push(URL.createObjectURL(file))
+      imageTiles.value.push({ url: URL.createObjectURL(file), file })
     })
   ;(event.target as HTMLInputElement).value = ''
 }
 
 function removeImage(index: number) {
-  images.value.splice(index, 1)
+  const [tile] = imageTiles.value.splice(index, 1)
+  if (tile) URL.revokeObjectURL(tile.url)
 }
 
-function submit() {
-  const oc = store.addOc({
-    name: name.value.trim() || 'Nome do oc',
-    author: author.value.trim() || 'Autor',
-    especie: especie.value.trim(),
-    sexo: sexo.value.trim(),
-    altura: altura.value.trim(),
-    caracteristicas: caracteristicas.value.trim(),
-    descricao: descricao.value.trim(),
-    images: images.value,
+async function submit() {
+  errorMessages.value = []
+
+  const result = await store.addOc({
+    oc_name: name.value.trim() || 'Nome do oc',
+    specie: specie.value.trim(),
+    sex: sex.value.trim(),
+    height: height.raw.value,
+    description: description.value.trim(),
+    newImages: imageTiles.value.map((tile) => tile.file),
+    existingImageIndexes: [],
   })
-  router.push(`/hub/oc/${oc.id}`)
+
+  if (!result.success || !result.data) {
+    errorMessages.value = result.errors ?? ['Não foi possível enviar o OC. Tente novamente.']
+    return
+  }
+
+  router.push(`/hub/oc/${result.data.id}`)
 }
 </script>
 
@@ -63,45 +81,49 @@ function submit() {
     <main class="upload-page__content">
       <form class="sheet" @submit.prevent="submit">
         <h1 class="sheet__title">Upload de OC</h1>
+        <p class="sheet__author-hint">Postando como <strong>{{ userStore.username ?? 'você' }}</strong></p>
         <div class="sheet__divider" />
 
         <div class="sheet__grid">
-          <label class="sheet__field">
-            <span>Nome:</span>
-            <input v-model="name" type="text" placeholder="Nome do OC" />
-          </label>
-          <label class="sheet__field">
-            <span>Autor:</span>
-            <input v-model="author" type="text" placeholder="Seu nome/apelido" />
-          </label>
-          <label class="sheet__field">
-            <span>Espécie:</span>
-            <input v-model="especie" type="text" placeholder="Ex: Raposa" />
-          </label>
-          <label class="sheet__field">
-            <span>Sexo:</span>
-            <input v-model="sexo" type="text" placeholder="Ex: Masculino" />
-          </label>
-          <label class="sheet__field">
-            <span>Altura:</span>
-            <input v-model="altura" type="text" placeholder="Ex: 170cm" />
-          </label>
-          <label class="sheet__field">
-            <span>Características:</span>
-            <input v-model="caracteristicas" type="text" placeholder="Separadas por vírgula" />
-          </label>
+            <label class="sheet__field">
+                <span>Nome:</span>
+                <input v-model="name" type="text" placeholder="Nome do OC" />
+            </label>
+            <label class="sheet__field">
+                <span>Espécie:</span>
+                <input v-model="specie" type="text" placeholder="Ex: Raposa" />
+            </label>
+            <label class="sheet__field">
+                <span>Sexo:</span>
+                <select v-model="sex">
+                    <option value="" disabled>Selecione</option>
+                    <option value="M">Masculino</option>
+                    <option value="F">Feminino</option>
+                    <option value="O">Outro</option>
+                </select>
+                </label>
+                <label class="sheet__field">
+                <span>Altura:</span>
+                <input
+                    :value="height.display.value"
+                    @input="height.onInput"
+                    type="text"
+                    inputmode="numeric"
+                    placeholder="1,70 m"
+                />
+            </label>
         </div>
 
         <label class="sheet__field sheet__field--full">
           <span>Descrição:</span>
-          <textarea v-model="descricao" rows="4" placeholder="Conte um pouco sobre o OC" />
+          <textarea v-model="description" rows="4" placeholder="Conte um pouco sobre o OC" />
         </label>
 
         <div class="sheet__field sheet__field--full">
           <span>Upload:</span>
           <div class="image-picker">
-            <div v-for="(src, index) in images" :key="src" class="image-picker__tile">
-              <img :src="src" alt="" />
+            <div v-for="(tile, index) in imageTiles" :key="tile.url" class="image-picker__tile">
+              <img :src="tile.url" alt="" />
               <button
                 type="button"
                 class="image-picker__remove"
@@ -112,7 +134,7 @@ function submit() {
               </button>
             </div>
             <button
-              v-if="images.length < MAX_IMAGES"
+              v-if="imageTiles.length < MAX_IMAGES"
               type="button"
               class="image-picker__add"
               @click="triggerFilePicker"
@@ -132,8 +154,14 @@ function submit() {
           <p class="image-picker__hint">Até {{ MAX_IMAGES }} imagens.</p>
         </div>
 
+        <ul v-if="errorMessages.length" class="sheet__error-list">
+            <li v-for="(msg, i) in errorMessages" :key="i">{{ msg }}</li>
+        </ul>
+
         <div class="sheet__actions">
-          <button type="submit" class="sheet__submit">Upload</button>
+          <button type="submit" class="sheet__submit" :disabled="store.isSaving">
+            {{ store.isSaving ? 'Enviando...' : 'Upload' }}
+          </button>
         </div>
       </form>
     </main>
@@ -166,6 +194,13 @@ function submit() {
 .sheet__title {
   font-size: 28px;
   text-align: center;
+}
+
+.sheet__author-hint {
+  margin: 6px 0 0;
+  text-align: center;
+  font-size: 13px;
+  color: var(--color-text-muted);
 }
 
 .sheet__divider {
@@ -280,6 +315,13 @@ function submit() {
   color: var(--color-text-faint);
 }
 
+.sheet__error {
+  margin: 0 0 16px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-danger, #c0392b);
+}
+
 .sheet__actions {
   display: flex;
   justify-content: flex-end;
@@ -302,6 +344,42 @@ function submit() {
   background: var(--color-brand-strong);
 }
 
+.sheet__submit:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+
+.sheet__field select,
+.modal-sheet__field select {
+  font-family: var(--font-body);
+  font-weight: 400;
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-elevated);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  color: var(--color-text);
+  font-size: 15px;
+  outline: none;
+}
+
+.sheet__error-list {
+  margin: 0 0 16px;
+  padding: 10px 14px;
+  list-style: disc;
+  list-style-position: inside;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-danger, #c0392b);
+  background: color-mix(in srgb, var(--color-danger, #c0392b) 8%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-danger, #c0392b) 30%, transparent);
+  border-radius: var(--radius-sm);
+}
+
+.sheet__error-list li + li {
+  margin-top: 2px;
+}
+
 @media (max-width: 640px) {
   .sheet__grid {
     grid-template-columns: 1fr;
@@ -310,4 +388,5 @@ function submit() {
     padding: 24px 20px;
   }
 }
+
 </style>

@@ -10,9 +10,10 @@ pub fn user_table_def() -> &'static str  {
 pub fn post_table_def() -> &'static str {
     "CREATE TABLE IF NOT EXISTS posts(
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        oc_name CHAR(100) NOT NULL,
+        oc_name CHAR(40) NOT NULL,
         description CHAR(1000),
-        specie CHAR(100),
+        specie CHAR(50),
+        height CHAR(3),
         sex CHAR(1),
         creator_user_name CHAR(20) NOT NULL
     )"

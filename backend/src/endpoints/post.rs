@@ -6,8 +6,11 @@ use tracing::{error, warn, instrument};
 
 use crate::{
     api_error::ApiError, appstate::AppState, error::Error, middleware::auth::AuthUser, schemas::{
-        post::{CreatePost, EditPost, PostMetadata, PostMinified}, query::{PostQuery, is_query_valid}
-    }, services::image::{update_images,MAX_IMAGES}
+        post::{CreatePost, EditPost, PostMetadata, PostMinified}, query::PostQuery
+    }, services::image::{MAX_IMAGES, get_thumb, update_images}, validator::post_validator::{
+        validate_post_create_post,
+        validate_post_edit_post
+    }
 };
 
 use serde::de::DeserializeOwned;
@@ -31,25 +34,32 @@ pub async fn create_post(
         return Err(ApiError::BadRequest("invalid request".into()));
     }
 
-    if images.is_empty() {
-        warn!("request contained no images");
-        return Err(ApiError::BadRequest("invalid request".into()));
+    let validation = validate_post_create_post(&metadata);
+    if validation.len() != 0 {
+        return Err(ApiError::BadRequest(validation));
     }
 
-    let saved_paths : Vec<String> = update_images(
+    if images.is_empty() {
+        warn!("request contained no images");
+        return Err(ApiError::BadRequest("Você precisa enviar pelo menos uma imagem".into()));
+    }
+
+    update_images(
         &auth.user_name,
         &metadata.oc_name,
         &state.image_repo_path,
-        images
+        images,
+        Vec::new()
     ).await?;
 
 
     let post_id: i32 = sqlx::query_scalar(
-        "INSERT INTO posts (oc_name, description, creator_user_name,specie, sex) VALUES ($1, $2, $3, $4, $5) RETURNING id"
+        "INSERT INTO posts (oc_name, description, creator_user_name,height,specie, sex) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id"
     )
         .bind(&metadata.oc_name)
         .bind(&metadata.description)
         .bind(&auth.user_name)
+        .bind(&metadata.height)
         .bind(&metadata.specie)
         .bind(&metadata.sex)
         .fetch_one(&state.db)
@@ -60,8 +70,7 @@ pub async fn create_post(
         })?;
 
     Ok(HttpResponse::Created().json(serde_json::json!({
-        "id": post_id,
-        "images": saved_paths
+        "id": post_id
     })))
 }
 
@@ -74,6 +83,11 @@ pub async fn update_post(
 ) -> Result<HttpResponse, ApiError> {
 
     let (metadata, images): (EditPost, Vec<Vec<u8>>) = parse_post_multipart(payload).await?;
+
+    let validation = validate_post_edit_post(&metadata);
+    if validation.len() != 0 {
+        return Err(ApiError::BadRequest(validation));
+    }
 
     //checks if the user is the creator of the post
     let post_id: Option<i32> = sqlx::query_scalar(
@@ -92,25 +106,30 @@ pub async fn update_post(
         return Err(ApiError::UnAuthorized("unauthorized".into()));
     };
 
-    if images.is_empty() {
-        warn!("request contained no images");
-        return Err(ApiError::BadRequest("invalid request".into()));
-    }
-
-    let saved_paths : Vec<String> = update_images(
+    update_images(
         &auth.user_name,
         &metadata.oc_name,
         &state.image_repo_path,
-        images
+        images,
+        metadata.existing_images
     ).await?;
 
-    sqlx::query(
-        "UPDATE posts SET oc_name = $1, description = $2, specie = $3, sex = $4 WHERE id = $5 AND creator_user_name = $6 RETURNING id"
+    let result = sqlx::query(
+        "UPDATE posts SET 
+            oc_name = $1,
+            description = $2,
+            specie = $3,
+            sex = $4,
+            height = $5
+        WHERE id = $6
+        AND creator_user_name = $7 
+        RETURNING id"
     )
         .bind(&metadata.oc_name)
         .bind(&metadata.description)
         .bind(&metadata.specie)
         .bind(&metadata.sex)
+        .bind(&metadata.height)
         .bind(&metadata.id)
         .bind(&auth.user_name)
         .execute(&state.db)
@@ -120,11 +139,12 @@ pub async fn update_post(
             ApiError::Internal(Error::Other("internal server error".into()))
         })?;
 
+    if result.rows_affected() == 0 {
+        warn!(id = %metadata.id, "update matched no rows");
+        return Err(ApiError::UnAuthorized("unauthorized".into()));
+    }
 
-    Ok(HttpResponse::Created().json(serde_json::json!({
-        "id": metadata.id,
-        "images": saved_paths
-    })))
+    Ok(HttpResponse::Ok().json(""))
 }
 
 
@@ -212,55 +232,86 @@ where
 //===============================public api===============================
 
 
-
-#[get("/api/v1/posts/{type}/{query}")]
+#[get("/api/v1/posts")]
 pub async fn query_posts(
     state: web::Data<AppState>,
     query_params : web::Path<PostQuery>
 ) -> Result<HttpResponse, ApiError> {
     let query_params = query_params.into_inner();
 
-    let query : String = if is_query_valid(&query_params) {
-        query_params.query
-    } else {
-        "".into()
-    };
+    let query : String = query_params.query.unwrap_or_default();
+    let query_type : String = query_params.query_type.unwrap_or_default();
 
     let mut query_posts : Vec<PostMinified> = Vec::new();
 
     //if is searching by oc_name or creator_name
-    let posts : Vec<SqliteRow> = 
-    if query_params.query_type == "C"{
+    let posts: Vec<SqliteRow> =
+    if query_type == "C" {
         sqlx::query(
-            "SELECT id, oc_name, creator_user_name FROM posts WHERE oc_name LIKE $1 LIMIT $2"
+            "SELECT id, oc_name, creator_user_name
+             FROM posts
+             WHERE oc_name LIKE $1
+             ORDER BY id DESC
+             LIMIT $2"
         )
-            .bind(format!("{}%", &query))
-            .bind(MAX_QUERY_POSTS)
-            .fetch_all(&state.db)
-            .await
-            .map_err(|e| {
-                error!(error = %e, "database error while querying posts");
-                ApiError::Internal(Error::Other("internal server error".into()))
-            })?
-    }else{
+        .bind(format!("{}%", &query))
+        .bind(MAX_QUERY_POSTS)
+        .fetch_all(&state.db)
+        .await
+        .map_err(|e| {
+            error!(error = %e, "database error while querying posts");
+            ApiError::Internal(Error::Other("internal server error".into()))
+        })?
+
+    } else if query_type == "U" {
         sqlx::query(
-            "SELECT id, oc_name, creator_user_name FROM posts WHERE creator_user_name LIKE $1 LIMIT $2"
+            "SELECT id, oc_name, creator_user_name
+             FROM posts
+             WHERE creator_user_name LIKE $1
+             ORDER BY id DESC
+             LIMIT $2"
         )
-            .bind(format!("{}%", &query))
-            .bind(MAX_QUERY_POSTS)
-            .fetch_all(&state.db)
-            .await
-            .map_err(|e| {
-                error!(error = %e, "database error while querying posts");
-                ApiError::Internal(Error::Other("internal server error".into()))
-            })?
+        .bind(format!("{}%", &query))
+        .bind(MAX_QUERY_POSTS)
+        .fetch_all(&state.db)
+        .await
+        .map_err(|e| {
+            error!(error = %e, "database error while querying posts");
+            ApiError::Internal(Error::Other("internal server error".into()))
+        })?
+
+    } else {
+        sqlx::query(
+            "SELECT id, oc_name, creator_user_name
+             FROM posts
+             ORDER BY id DESC
+             LIMIT $1"
+        )
+        .bind(MAX_QUERY_POSTS)
+        .fetch_all(&state.db)
+        .await
+        .map_err(|e| {
+            error!(error = %e, "database error while querying posts");
+            ApiError::Internal(Error::Other("internal server error".into()))
+        })?
     };
 
+    
     for post in posts {
+        let id = post.try_get("id")?; 
+        let oc_name : String = post.try_get("oc_name")?;
+        let creator_user_name: String = post.try_get("creator_user_name")?;
+        let thumb = get_thumb(
+            &creator_user_name,
+            &oc_name,
+            &state.image_repo_path
+        ).await?;
+
         query_posts.push(PostMinified {
-            id: post.get("id"),
-            oc_name: post.get("oc_name"),
-            creator_user_name: post.get("creator_user_name")
+            id,
+            oc_name,
+            creator_user_name,
+            thumb
         });
     }
 
@@ -288,7 +339,7 @@ pub async fn get_post(
     }
 
     let post : Option<SqliteRow> = sqlx::query(
-        "SELECT id, creator_user_name, oc_name, description , specie, sex FROM posts WHERE id = $1"
+        "SELECT id, creator_user_name, oc_name, description, height , specie, sex FROM posts WHERE id = $1"
     )
         .bind(post_id)
         .fetch_optional(&state.db)

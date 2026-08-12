@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use sqlx::Row;
 use crate::{
     error::Error,
-    services::image::{get_images_ids},
+    services::image::{get_images},
 };
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -13,6 +13,7 @@ pub struct PostMetadata {
     pub description: String,
     pub specie : String,
     pub sex : String,
+    pub height : String,
     pub images: Vec<String>,
 }
 
@@ -20,7 +21,8 @@ pub struct PostMetadata {
 pub struct PostMinified {
     pub id : i32,
     pub creator_user_name: String,
-    pub oc_name: String
+    pub oc_name: String,
+    pub thumb : String
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -29,6 +31,7 @@ pub struct CreatePost{
     pub description: String,
     pub specie : String,
     pub sex : String,
+    pub height : String,
 }
 
 
@@ -39,6 +42,8 @@ pub struct EditPost{
     pub description: String,
     pub sex : String,
     pub specie : String,
+    pub height : String,
+    pub existing_images : Vec<i32>
 }
 
 
@@ -47,21 +52,22 @@ impl PostMetadata{
     pub async fn from_row(
         row : sqlx::sqlite::SqliteRow, image_repo_path : &str
     ) -> Result<PostMetadata, Error> {
-        let user_name : String = row.get("creator_user_name");
-        let oc_name : String = row.get("oc_name");
-        let images = get_images_ids(
+        let user_name : String = row.try_get("creator_user_name")?;
+        let oc_name : String = row.try_get("oc_name")?;
+        let images = get_images(
             &user_name,
             &oc_name,
             image_repo_path
         ).await?;
 
         Ok(PostMetadata {
-            id : row.get("id"),
+            id : row.try_get("id")?,
             creator_user_name : user_name,
             oc_name : oc_name,
-            description : row.get("description"),
-            specie : row.get("specie"),
-            sex : row.get("sex"),
+            description : row.try_get("description")?,
+            specie : row.try_get("specie")?,
+            sex : row.try_get("sex")?,
+            height : row.try_get("height")?,
             images : images,
         })
 

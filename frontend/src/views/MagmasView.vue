@@ -59,8 +59,26 @@ async function fetchMagmaTitle(url: string): Promise<string> {
   return stripBrandSuffix(rawTitle)
 }
 
+interface MagmaList{
+    magmas_id: string[]
+}
+
+async function get_magmas() : Promise<string[]>{
+    try{
+        const response = await fetch("/api/v1/magmas");
+        if (!response.ok) {
+            throw new Error(`HTTP error! Status: ${response.status}`);
+        }
+        return ((await response.json()) as MagmaList).magmas_id;
+
+    } catch (e) {
+        console.error("Failed to fetch magmas:", e);
+    }
+    return []
+}
+
 onMounted(async () => {
-  const urls = getMockMagmas()
+  const urls = await get_magmas();
 
   magmas.value = urls.map((url) => {
     const id = extractCanvasId(url)

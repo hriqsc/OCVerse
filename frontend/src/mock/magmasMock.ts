@@ -1,5 +1,6 @@
 
 
+
 export function getMockMagmas() : string[]{
     return [
         "https://magma.com/d/U5Qo6tcUP1",

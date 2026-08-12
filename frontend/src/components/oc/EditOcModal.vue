@@ -1,41 +1,59 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
-import type { Oc, OcDraft } from '@/types/oc'
+import { onUnmounted, ref, watch } from 'vue'
+import type { OcDraft, EditOc, Oc } from '@/types/oc'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
+import { useHeightMask } from '@/composables/useHeightMask'
+import { useOcStore } from '@/stores/oc'
+import { processImageFile,ImageProcessingError  } from '@/service/image'
 
-const props = defineProps<{ open: boolean; oc: Oc }>()
-const emit = defineEmits<{ 'update:open': [value: boolean]; save: [draft: OcDraft] }>()
+const props = defineProps<{ open: boolean; oc: EditOc }>()
+const emit = defineEmits<{ 'update:open': [value: boolean]; saved: [] }>()
+
+const store = useOcStore()
 
 const MAX_IMAGES = 4
 const fileInput = ref<HTMLInputElement>()
-// how many image slots are currently "uploading" — shows a loading tile
-// in their place until the file finishes processing
 const uploadingCount = ref(0)
+const errorMessages = ref<string[]>([])
 
-const name = ref(props.oc.name)
-const author = ref(props.oc.author)
-const especie = ref(props.oc.especie)
-const sexo = ref(props.oc.sexo)
-const altura = ref(props.oc.altura)
-const caracteristicas = ref(props.oc.caracteristicas)
-const descricao = ref(props.oc.descricao)
-const images = ref<string[]>([...props.oc.images])
+const name = ref(props.oc.oc_name)
+const specie = ref(props.oc.specie)
+const sex = ref(props.oc.sex)
+const height = useHeightMask(props.oc.height)
+const description = ref(props.oc.description)
 
-// reset the form fields whenever a new OC is opened for editing
+interface ImageTile {
+  url: string
+  file?: File
+  originalIndex?: number
+}
+const imageTiles = ref<ImageTile[]>([])
+
+function revokeNewImageUrls() {
+  imageTiles.value.forEach((tile) => {
+    if (tile.file) URL.revokeObjectURL(tile.url)
+  })
+}
+
 watch(
   () => props.open,
   (isOpen) => {
-    if (!isOpen) return
-    name.value = props.oc.name
-    author.value = props.oc.author
-    especie.value = props.oc.especie
-    sexo.value = props.oc.sexo
-    altura.value = props.oc.altura
-    caracteristicas.value = props.oc.caracteristicas
-    descricao.value = props.oc.descricao
-    images.value = [...props.oc.images]
+    if (isOpen) {
+      name.value = props.oc.oc_name
+      specie.value = props.oc.specie
+      sex.value = props.oc.sex
+      height.reset(props.oc.height)
+      description.value = props.oc.description
+      uploadingCount.value = 0
+      errorMessages.value = []
+      imageTiles.value = props.oc.images.map(({ slot, url }) => ({ url, originalIndex: slot }))
+    } else {
+      revokeNewImageUrls()
+    }
   },
 )
+
+onUnmounted(revokeNewImageUrls)
 
 function close() {
   emit('update:open', false)
@@ -48,38 +66,56 @@ function triggerFilePicker() {
 function handleFiles(event: Event) {
   const files = (event.target as HTMLInputElement).files
   if (!files) return
-  const remaining = MAX_IMAGES - images.value.length
+  const remaining = MAX_IMAGES - imageTiles.value.length
   const toProcess = Array.from(files).slice(0, remaining)
 
   toProcess.forEach((file) => {
     uploadingCount.value++
-    // brief artificial delay so the loading tile is visible even on fast
-    // local reads — swap this for the real upload request when available
-    const url = URL.createObjectURL(file)
-    const minDelay = new Promise((resolve) => setTimeout(resolve, 500))
-    minDelay.then(() => {
-      images.value.push(url)
-      uploadingCount.value--
-    })
+    processImageFile(file)
+      .then((processed) => {
+        const url = URL.createObjectURL(processed)
+        imageTiles.value.push({ url, file: processed })
+      })
+      .catch((e) => {
+        const message =
+          e instanceof ImageProcessingError ? e.message : 'Não foi possível processar esta imagem.'
+        errorMessages.value = [...errorMessages.value, `${file.name}: ${message}`]
+      })
+      .finally(() => {
+        uploadingCount.value--
+      })
   })
   ;(event.target as HTMLInputElement).value = ''
 }
 
 function removeImage(index: number) {
-  images.value.splice(index, 1)
+  const [tile] = imageTiles.value.splice(index, 1)
+  if (tile?.file) URL.revokeObjectURL(tile.url)
 }
 
-function save() {
-  emit('save', {
-    name: name.value.trim() || 'Nome do oc',
-    author: author.value.trim() || 'Autor',
-    especie: especie.value.trim(),
-    sexo: sexo.value.trim(),
-    altura: altura.value.trim(),
-    caracteristicas: caracteristicas.value.trim(),
-    descricao: descricao.value.trim(),
-    images: images.value,
-  })
+async function save() {
+  errorMessages.value = []
+
+  const draft: OcDraft = {
+    oc_name: name.value.trim() || 'Nome do oc',
+    specie: specie.value.trim(),
+    sex: sex.value.trim(),
+    height: height.raw.value.trim(),
+    description: description.value.trim(),
+    newImages: imageTiles.value.filter((t) => t.file).map((t) => t.file as File),
+    existingImageIndexes: imageTiles.value
+      .filter((t) => t.originalIndex !== undefined)
+      .map((t) => t.originalIndex as number),
+  }
+
+  const result = await store.updateOc(props.oc.id, draft)
+
+  if (!result.success) {
+    errorMessages.value = result.errors ?? ['Não foi possível salvar as alterações. Tente novamente.']
+    return
+  }
+
+  emit('saved')
   close()
 }
 </script>
@@ -102,37 +138,39 @@ function save() {
               <input v-model="name" type="text" />
             </label>
             <label class="modal-sheet__field">
-              <span>Autor:</span>
-              <input v-model="author" type="text" />
-            </label>
-            <label class="modal-sheet__field">
               <span>Espécie:</span>
-              <input v-model="especie" type="text" />
+              <input v-model="specie" type="text" />
             </label>
             <label class="modal-sheet__field">
-              <span>Sexo:</span>
-              <input v-model="sexo" type="text" />
-            </label>
-            <label class="modal-sheet__field">
-              <span>Altura:</span>
-              <input v-model="altura" type="text" />
-            </label>
-            <label class="modal-sheet__field">
-              <span>Características:</span>
-              <input v-model="caracteristicas" type="text" />
+                <span>Sexo:</span>
+                <select v-model="sex">
+                    <option value="M">Masculino</option>
+                    <option value="F">Feminino</option>
+                    <option value="O">Outro</option>
+                </select>
+                </label>
+                <label class="modal-sheet__field">
+                <span>Altura:</span>
+                <input
+                    :value="height.display.value"
+                    @input="height.onInput"
+                    type="text"
+                    inputmode="numeric"
+                    placeholder="1,70 m"
+                />
             </label>
           </div>
 
           <label class="modal-sheet__field modal-sheet__field--full">
             <span>Descrição:</span>
-            <textarea v-model="descricao" rows="3" />
+            <textarea v-model="description" rows="3" />
           </label>
 
           <div class="modal-sheet__field modal-sheet__field--full">
             <span>Imagens:</span>
             <div class="image-picker">
-              <div v-for="(src, index) in images" :key="src" class="image-picker__tile">
-                <img :src="src" alt="" />
+              <div v-for="(tile, index) in imageTiles" :key="tile.url" class="image-picker__tile">
+                <img :src="tile.url" alt="" />
                 <button
                   type="button"
                   class="image-picker__remove"
@@ -146,7 +184,7 @@ function save() {
                 <LoadingSpinner size="sm" label="" />
               </div>
               <button
-                v-if="images.length + uploadingCount < MAX_IMAGES"
+                v-if="imageTiles.length + uploadingCount < MAX_IMAGES"
                 type="button"
                 class="image-picker__add"
                 @click="triggerFilePicker"
@@ -165,9 +203,15 @@ function save() {
             />
           </div>
 
+          <ul v-if="errorMessages.length" class="modal-sheet__error-list">
+            <li v-for="(msg, i) in errorMessages" :key="i">{{ msg }}</li>
+          </ul>
+
           <div class="modal-sheet__actions">
             <button type="button" class="modal-sheet__cancel" @click="close">Cancelar</button>
-            <button type="submit" class="modal-sheet__save">Salvar</button>
+            <button type="submit" class="modal-sheet__save" :disabled="store.isSaving">
+              {{ store.isSaving ? 'Salvando...' : 'Salvar' }}
+            </button>
           </div>
         </form>
       </div>
@@ -389,6 +433,38 @@ function save() {
 .modal-fade-leave-to .modal-sheet {
   transform: scale(0.96) translateY(8px);
 }
+
+.sheet__field select,
+.modal-sheet__field select {
+  font-family: var(--font-body);
+  font-weight: 400;
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-elevated);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  color: var(--color-text);
+  font-size: 15px;
+  outline: none;
+}
+
+
+.modal-sheet__error-list {
+  margin: 0 0 16px;
+  padding: 10px 14px;
+  list-style: disc;
+  list-style-position: inside;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-danger, #c0392b);
+  background: color-mix(in srgb, var(--color-danger, #c0392b) 8%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-danger, #c0392b) 30%, transparent);
+  border-radius: var(--radius-sm);
+}
+
+.modal-sheet__error-list li + li {
+  margin-top: 2px;
+}
+
 
 @media (max-width: 560px) {
   .modal-sheet__grid {

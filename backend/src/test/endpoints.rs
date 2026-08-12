@@ -1,7 +1,7 @@
 //! src/test/endpoints.rs
 //!
 //! Integration tests for `endpoints::user`, `endpoints::post`,
-//! `endpoints::magma`, `endpoints::images`.
+//! `endpoints::magma`.
 //!
 //! Run with: cargo test -- --test-threads=1 --nocapture
 
@@ -12,7 +12,7 @@ use serde_json::json;
 
 use crate::{
     appstate::AppState,
-    endpoints::{images, magma, post, user},
+    endpoints::{magma, post, user},
 };
 
 // ---------------------------------------------------------------------
@@ -724,39 +724,6 @@ async fn test_list_magmas_returns_200() {
     let resp = test::call_service(&app, req).await;
     println!("{}", &resp.status());
     assert_eq!(resp.status(), StatusCode::OK);
-    
-
-}
-
-// =======================================================================
-// images
-// =======================================================================
-
-#[actix_web::test]
-async fn test_get_file_path_traversal_returns_400_or_404() {
-    let state = setup_state().await;
-    let app =
-        test::init_service(App::new().app_data(state.clone()).service(images::get_file)).await;
-
-    let req = test::TestRequest::get().uri("/f/v1/someuser/../secrets/1").to_request();
-    let resp = test::call_service(&app, req).await;
-    println!("{}", &resp.status());
-    let status = resp.status();
-    assert!(status == StatusCode::BAD_REQUEST || status == StatusCode::NOT_FOUND);
-    
-
-}
-
-#[actix_web::test]
-async fn test_get_file_missing_file_returns_404() {
-    let state = setup_state().await;
-    let app =
-        test::init_service(App::new().app_data(state.clone()).service(images::get_file)).await;
-
-    let req = test::TestRequest::get().uri("/f/v1/nobody/nothing/nonexistent-id").to_request();
-    let resp = test::call_service(&app, req).await;
-    println!("{}", &resp.status());
-    assert_eq!(resp.status(), StatusCode::NOT_FOUND);
     
 
 }

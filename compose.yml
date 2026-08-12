@@ -1,21 +1,84 @@
+x-app: &app
+  working_dir: /app
+  env_file:
+    - .env
+  restart: on-failure:5
+  security_opt:
+    - no-new-privileges:true
+  logging:
+    driver: json-file
+    options:
+      max-size: "5m"
+      max-file: "2"
+
 services:
-  app:
+  backend:
+    <<: *app
     image: debian:bookworm-slim
-    working_dir: /app
+    container_name: backend
+    user: "1000:1000"
+    read_only: true
+    tmpfs:
+      - /tmp
     volumes:
       - ./backend/target/release/backend:/app/backend:ro
       - ./data/${DB_DIR}:/app/${DB_DIR}
       - ./data/${IMAGE_REPO_PATH}:/app/${IMAGE_REPO_PATH}
     entrypoint: ["/app/backend"]
-    env_file:
-      - .env
     environment:
-      - RUST_BACKTRACE=full
+      - RUST_BACKTRACE=1
     ports:
       - "${BACKEND_PORT}:${BACKEND_PORT}"
-    restart: unless-stopped
-    cpus: "0.5"
-    mem_limit: 512m
-    mem_reservation: 256m
-    memswap_limit: 512m
-    pids_limit: 100
+    networks:
+      - app
+    deploy:
+      resources:
+        limits:
+          cpus: "0.7"
+          memory: 650m
+          pids: 100
+        reservations:
+          cpus: "0.2"
+          memory: 300m
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/localhost/${BACKEND_PORT}' || exit 1"]  #ajust after to use --healthcheck on the backend
+      interval: 30s
+      timeout: 3s
+      retries: 3
+
+  frontend:
+    <<: *app
+    image: nginx:1.27-alpine
+    container_name: frontend
+    depends_on:
+      - backend
+    volumes:
+      - ./frontend/dist:/usr/share/nginx/html:ro
+      - ./data/images:/usr/share/nginx/images:ro
+      - ./nginx.conf.template:/etc/nginx/templates/default.conf.template:ro
+      - ./logs:/var/log/nginx
+    ports:
+      - "${FRONTEND_PORT}:80"
+    networks:
+      - app
+    environment:
+      - IMAGE_REPO_PATH=${IMAGE_REPO_PATH}
+      - BACKEND_PORT=${BACKEND_PORT}
+    deploy:
+      resources:
+        limits:
+          cpus: "0.2"
+          memory: 100m
+          pids: 50
+        reservations:
+          cpus: "0.05"
+          memory: 32m
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost/"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+
+networks:
+  app:
+    driver: bridge

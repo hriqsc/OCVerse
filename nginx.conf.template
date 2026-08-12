@@ -1,0 +1,48 @@
+server {
+    listen 80;
+    server_name _;
+    root /usr/share/nginx/html;
+    index index.html;
+
+    # Gzip - reduz tráfego, bom pra CPU/rede limitados
+    gzip on;
+    gzip_comp_level 5;
+    gzip_min_length 256;
+    gzip_types text/plain text/css application/json application/javascript
+               text/xml application/xml application/xml+rss text/javascript
+               image/svg+xml font/woff2;
+
+    # Cache agressivo pros assets com hash no nome (Vite/Webpack build)
+    location ~* \.(?:css|js|woff2?|ttf|svg|png|jpg|jpeg|gif|ico)$ {
+        expires 30d;
+        add_header Cache-Control "public, immutable";
+        try_files $uri =404;
+    }
+
+    # SPA fallback (React/Vue Router etc.)
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+    
+    location ^~ /f/v1/ {
+        alias /usr/share/nginx/images/;
+        
+        expires 1y;
+        
+        add_header Cache-Control "public, max-age=31536000, immutable";
+    }
+
+    location ^~ /images/ {
+        alias /usr/share/nginx/images/;
+    }
+
+    # Proxy interno pro backend - assim você não expõe a porta dele no host
+    location /api/ {
+        proxy_pass http://backend:${BACKEND_PORT};
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}

@@ -7,14 +7,62 @@ const store = useAuthModalStore()
 const userStore = useUserStore()
 const username = ref('')
 const password = ref('')
+const errorMessage = ref('')
+const isSubmitting = ref(false)
 
-function submit() {
-  // mock: no backend yet — use whatever comes before the @ as the display name
-  const name = username.value|| 'Usuário'
-  userStore.login(name)
-  store.close()
+const SAFE_PATTERN = /^[a-zA-Z0-9_.]+$/
+
+function validate(): string | null {
+  const name = username.value.trim()
+  const pass = password.value
+
+  if (!name || !pass) {
+    return 'preencha usuario e senha'
+  }
+  if (!SAFE_PATTERN.test(name)) {
+    return 'usuario deve conter apenas letras, numeros, ponto ou underscore'
+  }
+  if (!SAFE_PATTERN.test(pass)) {
+    return 'senha deve conter apenas letras, numeros, ponto ou underscore'
+  }
+  return null
+}
+
+function resetForm() {
   username.value = ''
   password.value = ''
+  errorMessage.value = ''
+}
+
+async function submit() {
+  const validationError = validate()
+  if (validationError) {
+    errorMessage.value = validationError
+    return
+  }
+
+  errorMessage.value = ''
+  isSubmitting.value = true
+
+  try {
+    if (store.initialTab === 'login') {
+      await userStore.login(username.value.trim(), password.value)
+    } else {
+      await userStore.register(username.value.trim(), password.value)
+      await userStore.login(username.value.trim(), password.value)
+    }
+    resetForm()
+    store.close()
+  } catch (e) {
+    errorMessage.value = 'usuario ou senha invalidos'
+  } finally {
+    isSubmitting.value = false
+  }
+}
+
+function switchTab(tab: 'login' | 'registrar') {
+  store.initialTab = tab
+  errorMessage.value = ''
 }
 
 function handleKeydown(event: KeyboardEvent) {
@@ -28,6 +76,7 @@ watch(
   () => store.isOpen,
   (open) => {
     document.body.style.overflow = open ? 'hidden' : ''
+    if (!open) resetForm()
   },
 )
 </script>
@@ -46,7 +95,7 @@ watch(
               type="button"
               class="modal-card__tab"
               :class="{ 'modal-card__tab--active': store.initialTab === 'login' }"
-              @click="store.initialTab = 'login'"
+              @click="switchTab('login')"
             >
               Entrar
             </button>
@@ -54,7 +103,7 @@ watch(
               type="button"
               class="modal-card__tab"
               :class="{ 'modal-card__tab--active': store.initialTab === 'registrar' }"
-              @click="store.initialTab = 'registrar'"
+              @click="switchTab('registrar')"
             >
               Registrar
             </button>
@@ -73,16 +122,24 @@ watch(
 
           <form class="modal-card__form" @submit.prevent="submit">
             <label class="modal-card__field">
-              <span>E-mail</span>
-              <input v-model="username" required placeholder="nickname" />
+              <span>Usuario</span>
+              <input v-model="username" required placeholder="nickname" autocomplete="username" />
             </label>
             <label class="modal-card__field">
               <span>Senha</span>
-              <input v-model="password" type="password" required placeholder="••••••••" />
+              <input
+                v-model="password"
+                type="password"
+                required
+                placeholder="••••••••"
+                autocomplete="current-password"
+              />
             </label>
 
-            <button type="submit" class="modal-card__submit">
-              {{ store.initialTab === 'login' ? 'Entrar' : 'Registrar' }}
+            <p v-if="errorMessage" class="modal-card__error">{{ errorMessage }}</p>
+
+            <button type="submit" class="modal-card__submit" :disabled="isSubmitting">
+              {{ isSubmitting ? 'aguarde...' : store.initialTab === 'login' ? 'Entrar' : 'Registrar' }}
             </button>
           </form>
         </div>
@@ -199,6 +256,12 @@ watch(
   border-color: var(--color-brand);
 }
 
+.modal-card__error {
+  margin: -4px 0 0;
+  color: #ff6b6b;
+  font-size: 13px;
+}
+
 .modal-card__submit {
   margin-top: 6px;
   border: none;
@@ -214,6 +277,11 @@ watch(
 
 .modal-card__submit:hover {
   background: var(--color-brand-strong);
+}
+
+.modal-card__submit:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .modal-fade-enter-active,

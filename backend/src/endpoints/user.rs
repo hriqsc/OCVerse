@@ -84,7 +84,7 @@ pub async fn create_user(
 
     info!(user_name = %user_req.user_name, "user registered successfully");
 
-    Ok(HttpResponse::Created().body("user created"))
+    Ok(HttpResponse::Created().body(""))
 }
 
 
@@ -262,7 +262,10 @@ pub async fn refresh_token(
 
     Ok(HttpResponse::Ok()
         .cookie(refresh_cookie)
-        .json(serde_json::json!({ "access_token": access_token })))
+        .json(serde_json::json!({
+             "access_token": access_token,
+             "user_name": user_name
+        })))
 }
 
 

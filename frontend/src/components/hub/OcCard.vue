@@ -1,18 +1,20 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import type { Oc } from '@/types/oc'
+import type { PostMinified } from '@/types/oc'
 
-const props = defineProps<{ oc: Oc }>()
+const props = defineProps<{ oc: PostMinified }>()
 
-const tapeRotation = computed(() => [-6, -3, 4, 2, -4][(props.oc.avatarPalette - 1) % 5])
+const avatarPalette = computed(() => (props.oc.id % 5) + 1)
+
+const tapeRotation = computed(() => [-6, -3, 4, 2, -4][(avatarPalette.value - 1) % 5])
 
 const tapeStyle = computed(() => ({
-  '--tape-color': `var(--tape-${props.oc.avatarPalette})`,
+  '--tape-color': `var(--tape-${avatarPalette.value})`,
 }))
 
 const placeholderStyle = computed(() => ({
-  background: `var(--avatar-${props.oc.avatarPalette}-bg)`,
-  color: `var(--avatar-${props.oc.avatarPalette}-fg)`,
+  background: `var(--avatar-${avatarPalette.value}-bg)`,
+  color: `var(--avatar-${avatarPalette.value}-fg)`,
 }))
 </script>
 
@@ -32,8 +34,8 @@ const placeholderStyle = computed(() => ({
 
     <div class="oc-card__art">
       <img
-        v-if="oc.images[0]"
-        :src="oc.images[0]"
+        v-if="oc.thumb"
+        :src="oc.thumb"
         alt=""
         class="oc-card__image"
       />
@@ -54,8 +56,8 @@ const placeholderStyle = computed(() => ({
     </div>
 
     <footer class="oc-card__info">
-      <h3 class="oc-card__name">{{ oc.name }}</h3>
-      <p class="oc-card__author">por {{ oc.author }}</p>
+      <h3 class="oc-card__name">{{ oc.oc_name }}</h3>
+      <p class="oc-card__author">por {{ oc.creator_user_name }}</p>
     </footer>
   </router-link>
 </template>

@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import type { Oc } from '@/types/oc'
+import type { PostMinified } from '@/types/oc'
 import OcCard from '@/components/hub/OcCard.vue'
 
-defineProps<{ items: Oc[] }>()
+defineProps<{ items: PostMinified[] }>()
 </script>
 
 <template>

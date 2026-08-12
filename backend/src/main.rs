@@ -14,6 +14,7 @@ mod middleware;
 mod shared;
 mod definitions;
 mod test;
+mod validator;
 
 #[tokio::main]
 async fn main() {
@@ -73,7 +74,6 @@ async fn run(
                     .service(endpoints::magma::list_magmas)
             )
             .service(endpoints::magma::new_magma)
-            .service(endpoints::images::get_file)
     })
     .bind(address)?
     .run()

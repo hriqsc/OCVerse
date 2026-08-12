@@ -23,16 +23,16 @@ function setMode(mode: SearchMode) {
       <button
         type="button"
         class="search-bar__mode-btn"
-        :class="{ 'search-bar__mode-btn--active': store.searchMode === 'oc' }"
-        @click="setMode('oc')"
+        :class="{ 'search-bar__mode-btn--active': store.searchMode === 'C' }"
+        @click="setMode('C')"
       >
         OC
       </button>
       <button
         type="button"
         class="search-bar__mode-btn"
-        :class="{ 'search-bar__mode-btn--active': store.searchMode === 'autor' }"
-        @click="setMode('autor')"
+        :class="{ 'search-bar__mode-btn--active': store.searchMode === 'U' }"
+        @click="setMode('U')"
       >
         Autor
       </button>
@@ -43,7 +43,7 @@ function setMode(mode: SearchMode) {
       <input
         v-model="draft"
         type="search"
-        :placeholder="store.searchMode === 'oc' ? 'Pesquisar OC…' : 'Pesquisar autor…'"
+        :placeholder="store.searchMode === 'C' ? 'Pesquisar OC…' : 'Pesquisar autor…'"
         @keyup.enter="confirmSearch"
       />
     </label>
