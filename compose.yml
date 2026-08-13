@@ -54,7 +54,7 @@ services:
       - backend
     volumes:
       - ./frontend/dist:/usr/share/nginx/html:ro
-      - ./data/images:/usr/share/nginx/images:ro
+      - ./data/images:/usr/share/nginx/images
       - ./nginx.conf.template:/etc/nginx/templates/default.conf.template:ro
       - ./logs:/var/log/nginx
     ports:

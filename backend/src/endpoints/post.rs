@@ -1,13 +1,16 @@
 use actix_multipart::Multipart;
-use actix_web::{HttpResponse, get, post, put, web};
+use actix_web::{HttpResponse, get, post, put, web,delete};
 use futures_util::StreamExt;
 use sqlx::{Row, sqlite::SqliteRow};
 use tracing::{error, warn, instrument};
+use futures::future::try_join_all;
+use sqlx::QueryBuilder;
+
 
 use crate::{
     api_error::ApiError, appstate::AppState, error::Error, middleware::auth::AuthUser, schemas::{
         post::{CreatePost, EditPost, PostMetadata, PostMinified}, query::PostQuery
-    }, services::image::{MAX_IMAGES, get_thumb, update_images}, validator::post_validator::{
+    }, services::image::{MAX_IMAGES, delete_post_images, get_images, get_thumb, update_images}, validator::post_validator::{
         validate_post_create_post,
         validate_post_edit_post
     }
@@ -69,9 +72,23 @@ pub async fn create_post(
             ApiError::Internal(Error::Other("internal server error".into()))
         })?;
 
-    Ok(HttpResponse::Created().json(serde_json::json!({
-        "id": post_id
-    })))
+
+    let return_json = PostMetadata{
+        id : post_id,
+        creator_user_name : auth.user_name.clone(),
+        oc_name : metadata.oc_name.clone(),
+        description : metadata.description,
+        specie : metadata.specie,
+        sex : metadata.sex,
+        height : metadata.height,
+        images : get_images(
+            &auth.user_name,
+            &metadata.oc_name,
+            &state.image_repo_path
+        ).await?,
+    };
+
+    Ok(HttpResponse::Created().json(return_json))
 }
 
 #[instrument(skip(state, payload), fields(user = %auth.user_name))]
@@ -143,6 +160,68 @@ pub async fn update_post(
         warn!(id = %metadata.id, "update matched no rows");
         return Err(ApiError::UnAuthorized("unauthorized".into()));
     }
+
+    let return_json = PostMetadata{
+        id : metadata.id,
+        creator_user_name : auth.user_name.clone(),
+        oc_name : metadata.oc_name.clone(),
+        description : metadata.description,
+        specie : metadata.specie,
+        sex : metadata.sex,
+        height : metadata.height,
+        images : get_images(
+            &auth.user_name,
+            &metadata.oc_name,
+            &state.image_repo_path
+        ).await?,
+    };
+
+    Ok(HttpResponse::Ok().json(return_json))
+}
+
+
+#[instrument(skip(state), fields(user = %auth.user_name))]
+#[delete("/api/v1/post/{id}")]
+pub async fn delete_post(
+    state: web::Data<AppState>,
+    auth: AuthUser,
+    post_id: web::Path<String>,
+) -> Result<HttpResponse, ApiError> {
+    let post_id = post_id.into_inner();
+
+    let oc_name: String = sqlx::query_scalar(
+        "SELECT oc_name FROM posts WHERE id = $1 AND creator_user_name = $2"
+    )
+        .bind(&post_id)
+        .bind(&auth.user_name)
+        .fetch_one(&state.db)
+        .await
+        .map_err(|e| {
+            error!(error = %e, "failed to fetch oc_name for post");
+            ApiError::Internal(Error::Other("internal server error".into()))
+        })?;
+    
+    if oc_name.is_empty() {
+        return Err(ApiError::Internal(Error::Other("internal server error".into())));
+    }
+
+    delete_post_images(
+        &auth.user_name,
+        &oc_name,
+        &state.image_repo_path
+    ).await?;
+
+    sqlx::query(
+        "DELETE FROM posts WHERE id = $1 AND creator_user_name = $2"
+    )
+        .bind(&post_id)
+        .bind(&auth.user_name)
+        .execute(&state.db)
+        .await
+        .map_err(|e| {
+            error!(error = %e, "failed to delete post in database");
+            ApiError::Internal(Error::Other("internal server error".into()))
+        })?;
 
     Ok(HttpResponse::Ok().json(""))
 }
@@ -229,91 +308,65 @@ where
 
 
 
-//===============================public api===============================
 
+//===============================public api===============================
 
 #[get("/api/v1/posts")]
 pub async fn query_posts(
     state: web::Data<AppState>,
-    query_params : web::Path<PostQuery>
+    query_params: web::Query<PostQuery>,
 ) -> Result<HttpResponse, ApiError> {
     let query_params = query_params.into_inner();
+    let query = query_params.query.unwrap_or_default();
+    let query_type = query_params.query_type.unwrap_or_default();
 
-    let query : String = query_params.query.unwrap_or_default();
-    let query_type : String = query_params.query_type.unwrap_or_default();
+    // monta a query dinamicamente, sem repetir SQL 3x
+    let mut qb = QueryBuilder::new(
+        "SELECT id, oc_name, creator_user_name FROM posts"
+    );
 
-    let mut query_posts : Vec<PostMinified> = Vec::new();
-
-    //if is searching by oc_name or creator_name
-    let posts: Vec<SqliteRow> =
-    if query_type == "C" {
-        sqlx::query(
-            "SELECT id, oc_name, creator_user_name
-             FROM posts
-             WHERE oc_name LIKE $1
-             ORDER BY id DESC
-             LIMIT $2"
-        )
-        .bind(format!("{}%", &query))
-        .bind(MAX_QUERY_POSTS)
-        .fetch_all(&state.db)
-        .await
-        .map_err(|e| {
-            error!(error = %e, "database error while querying posts");
-            ApiError::Internal(Error::Other("internal server error".into()))
-        })?
-
-    } else if query_type == "U" {
-        sqlx::query(
-            "SELECT id, oc_name, creator_user_name
-             FROM posts
-             WHERE creator_user_name LIKE $1
-             ORDER BY id DESC
-             LIMIT $2"
-        )
-        .bind(format!("{}%", &query))
-        .bind(MAX_QUERY_POSTS)
-        .fetch_all(&state.db)
-        .await
-        .map_err(|e| {
-            error!(error = %e, "database error while querying posts");
-            ApiError::Internal(Error::Other("internal server error".into()))
-        })?
-
-    } else {
-        sqlx::query(
-            "SELECT id, oc_name, creator_user_name
-             FROM posts
-             ORDER BY id DESC
-             LIMIT $1"
-        )
-        .bind(MAX_QUERY_POSTS)
-        .fetch_all(&state.db)
-        .await
-        .map_err(|e| {
-            error!(error = %e, "database error while querying posts");
-            ApiError::Internal(Error::Other("internal server error".into()))
-        })?
+    let column = match query_type.as_str() {
+        "C" => Some("oc_name"),
+        "U" => Some("creator_user_name"),
+        _ => None,
     };
 
-    
-    for post in posts {
-        let id = post.try_get("id")?; 
-        let oc_name : String = post.try_get("oc_name")?;
-        let creator_user_name: String = post.try_get("creator_user_name")?;
-        let thumb = get_thumb(
-            &creator_user_name,
-            &oc_name,
-            &state.image_repo_path
-        ).await?;
-
-        query_posts.push(PostMinified {
-            id,
-            oc_name,
-            creator_user_name,
-            thumb
-        });
+    if let Some(col) = column {
+        qb.push(" WHERE ")
+            .push(col)
+            .push(" LIKE ")
+            .push_bind(format!("{}%", query));
     }
+
+    qb.push(" ORDER BY id DESC LIMIT ")
+        .push_bind(MAX_QUERY_POSTS);
+
+    let posts: Vec<SqliteRow> = qb
+        .build()
+        .fetch_all(&state.db)
+        .await
+        .map_err(|e| {
+            error!(error = %e, "database error while querying posts");
+            ApiError::Internal(Error::Other("internal server error".into()))
+        })?;
+
+    let query_posts: Vec<PostMinified> = try_join_all(posts.into_iter().map(|post| {
+        let image_repo_path = &state.image_repo_path;
+        async move {
+            let id: i32 = post.try_get("id")?;
+            let oc_name: String = post.try_get("oc_name")?;
+            let creator_user_name: String = post.try_get("creator_user_name")?;
+            let thumb = get_thumb(&creator_user_name, &oc_name, image_repo_path).await?;
+
+            Ok::<_, ApiError>(PostMinified {
+                id,
+                oc_name,
+                creator_user_name,
+                thumb,
+            })
+        }
+    }))
+    .await?;
 
     Ok(HttpResponse::Ok().json(serde_json::json!({
         "posts": query_posts,

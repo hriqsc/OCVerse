@@ -19,7 +19,7 @@ const router = createRouter({
       component: () => import('@/views/UploadView.vue'),
     },
     {
-      path: '/hub/oc/:id',
+      path: '/oc/:id',
       name: 'oc-detail',
       component: () => import('@/views/OcDetailView.vue'),
     },

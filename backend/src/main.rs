@@ -70,6 +70,7 @@ async fn run(
                     .service(endpoints::post::create_post)
                     .service(endpoints::post::update_post)
                     .service(endpoints::post::query_posts)
+                    .service(endpoints::post::delete_post)
 
                     .service(endpoints::magma::list_magmas)
             )

@@ -70,7 +70,7 @@ async function submit() {
     return
   }
 
-  router.push(`/hub/oc/${result.data.id}`)
+  router.push(`/oc/${result.data.id}`)
 }
 </script>
 

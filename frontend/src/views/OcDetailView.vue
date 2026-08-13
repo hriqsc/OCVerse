@@ -58,6 +58,18 @@ function closeLightbox() {
   lightboxSrc.value = null
 }
 
+async function confirmDelete() {
+  if (!oc.value) return
+  if (!window.confirm(`Tem certeza que deseja excluir "${oc.value.oc_name}"? Essa ação não pode ser desfeita.`)) return
+  const result = await store.deleteOc(oc.value!.id)
+  
+  if (result.success) {
+    window.location.href = '/hub'
+  }else{
+    console.error(result.error)
+  }
+}
+
 function handleKeydown(event: KeyboardEvent) {
   if (event.key === 'Escape') closeLightbox()
 }
@@ -80,21 +92,21 @@ onUnmounted(() => {
     </main>
 
     <main v-else-if="oc" class="detail-page__content">
-      <section class="hero">
-        <div class="hero__gallery">
-          <div class="hero__visual">
+      <section class="oc">
+        <div class="oc__gallery">
+          <div class="oc__visual">
             <template v-if="oc.images[activeIndex]">
-              <img
-                  :src="oc.images[activeIndex]!.url"
-                  class="hero__visual-img"
-                  role="button"
-                  tabindex="0"
-                  aria-label="Ampliar imagem"
-                  @click="openLightbox(oc.images[activeIndex]!.url)"
-                  @keydown.enter="openLightbox(oc.images[activeIndex]!.url)"
-              />
+                <img
+                    :src="oc.images[activeIndex]"
+                    class="oc__visual-img"
+                    role="button"
+                    tabindex="0"
+                    aria-label="Ampliar imagem"
+                    @click="openLightbox(oc.images[activeIndex]!)"
+                    @keydown.enter="openLightbox(oc.images[activeIndex]!)"
+                />
             </template>
-            <div v-else class="hero__placeholder" :class="`hero__placeholder--${avatarPalette}`">
+            <div v-else class="oc__placeholder" :class="`oc__placeholder--${avatarPalette}`">
               <svg viewBox="0 0 100 100" role="img" aria-label="Avatar placeholder">
                 <circle cx="50" cy="38" r="18" class="placeholder-shape" />
                 <path d="M14 100c0-24 16-38 36-38s36 14 36 38" class="placeholder-shape" />
@@ -103,32 +115,33 @@ onUnmounted(() => {
           </div>
         </div>
 
-        <aside class="hero__info">
-          <h1 class="hero__name">{{ oc.oc_name }}</h1>
-          <p class="hero__author">por {{ oc.creator_user_name }}</p>
-          <div class="hero__divider" />
+        <aside class="oc__info">
+          <h1 class="oc__name">{{ oc.oc_name }}</h1>
+          <p class="oc__author">por {{ oc.creator_user_name }}</p>
+          <div class="oc__divider" />
 
-          <dl class="hero__facts">
-            <div class="hero__fact">
+          <dl class="oc__facts">
+            <div class="oc__fact">
               <dt>Espécie:</dt>
-              <dd>{{ oc.specie || '—' }}</dd>
+              <dd>{{ oc.specie || 'desconhecida' }}</dd>
             </div>
-            <div class="hero__fact">
+            <div class="oc__fact">
               <dt>Sexo:</dt>
-              <dd>{{ oc.sex || '—' }}</dd>
+              <dd>{{ oc.sex === "M" ? "Masculino" : oc.sex === "F" ? "Feminino" : "Outro" }}</dd>
             </div>
-            <div class="hero__fact">
+            <div class="oc__fact">
               <dt>Altura:</dt>
               <dd>{{ oc.height || '—' }}</dd>
             </div>
-            <div class="hero__fact hero__fact--block">
+            <div class="oc__fact oc__fact--block">
               <dt>Descrição:</dt>
               <dd>{{ oc.description || 'Sem descrição.' }}</dd>
             </div>
           </dl>
 
-          <div v-if="isOwner" class="hero__actions">
-            <button type="button" class="hero__edit" @click="isEditOpen = true">Editar</button>
+          <div v-if="isOwner" class="oc__actions">
+            <button type="button" class="oc__edit" @click="isEditOpen = true">Editar</button>
+            <button type="button" class="oc__delete" @click="confirmDelete">Excluir</button>
           </div>
         </aside>
       </section>
@@ -143,15 +156,15 @@ onUnmounted(() => {
 
         <div class="gallery-grid">
             <img
-            v-for="(image, index) in oc.images"
-            :key="image.url + index"
-            :src="image.url"
-            class="gallery-image"
-            role="button"
-            tabindex="0"
-            aria-label="Ampliar imagem"
-            @click="openLightbox(image.url)"
-            @keydown.enter="openLightbox(image.url)"
+                v-for="(src, index) in oc.images"
+                :key="src + index"
+                :src="src"
+                class="gallery-image"
+                role="button"
+                tabindex="0"
+                aria-label="Ampliar imagem"
+                @click="openLightbox(src)"
+                @keydown.enter="openLightbox(src)"
             />
         </div>
         </section>
@@ -213,20 +226,20 @@ onUnmounted(() => {
   padding: 32px 32px 64px;
 }
 
-.hero {
+.oc {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 28px;
   align-items: start;
 }
 
-.hero__gallery {
+.oc__gallery {
   display: flex;
   flex-direction: column;
   gap: 12px;
 }
 
-.hero__visual {
+.oc__visual {
   display: flex;
   justify-content: center;
   align-items: flex-start;
@@ -234,7 +247,7 @@ onUnmounted(() => {
   overflow: visible;
 }
 
-.hero__visual-img {
+.oc__visual-img {
   display: block;
 
   width: auto;
@@ -252,13 +265,13 @@ onUnmounted(() => {
   transition: border-color var(--transition-fast);
 }
 
-.hero__visual-img:hover,
-.hero__visual-img:focus-visible {
+.oc__visual-img:hover,
+.oc__visual-img:focus-visible {
   border-color: var(--color-brand);
   outline: none;
 }
 
-.hero__placeholder {
+.oc__placeholder {
   width: 100%;
   height: 100%;
   display: grid;
@@ -269,33 +282,33 @@ onUnmounted(() => {
   fill: currentColor;
 }
 
-.hero__placeholder--1 {
+.oc__placeholder--1 {
   background: var(--avatar-1-bg);
   color: var(--avatar-1-fg);
 }
-.hero__placeholder--2 {
+.oc__placeholder--2 {
   background: var(--avatar-2-bg);
   color: var(--avatar-2-fg);
 }
-.hero__placeholder--3 {
+.oc__placeholder--3 {
   background: var(--avatar-3-bg);
   color: var(--avatar-3-fg);
 }
-.hero__placeholder--4 {
+.oc__placeholder--4 {
   background: var(--avatar-4-bg);
   color: var(--avatar-4-fg);
 }
-.hero__placeholder--5 {
+.oc__placeholder--5 {
   background: var(--avatar-5-bg);
   color: var(--avatar-5-fg);
 }
 
-.hero__placeholder svg {
+.oc__placeholder svg {
   width: 40%;
   height: 40%;
 }
 
-.hero__info {
+.oc__info {
   background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
@@ -303,62 +316,68 @@ onUnmounted(() => {
   padding: 28px 32px;
 }
 
-.hero__name {
+.oc__name {
   font-size: 30px;
 }
 
-.hero__author {
+.oc__author {
   margin: 2px 0 0;
   font-family: var(--font-hand);
   font-size: 22px;
   color: var(--color-text-muted);
 }
 
-.hero__divider {
+.oc__divider {
   height: 1px;
   background: var(--color-border);
   margin: 16px 0 20px;
 }
 
-.hero__facts {
+.oc__facts {
   display: flex;
   flex-direction: column;
   gap: 10px;
   margin: 0 0 24px;
 }
 
-.hero__fact {
+.oc__fact {
   display: flex;
   gap: 6px;
   font-size: 15px;
 }
 
-.hero__fact--block {
+.oc__fact--block {
   flex-direction: column;
   gap: 4px;
 }
 
-.hero__fact dt {
+.oc__fact dt {
   font-weight: 700;
   color: var(--color-text);
 }
 
-.hero__fact dd {
+.oc__fact dd {
   margin: 0;
   color: var(--color-text);
 }
 
-.hero__fact--block dd {
+.oc__fact--block dd {
   color: var(--color-text-muted);
   line-height: 1.5;
 }
 
-.hero__actions {
+.oc__actions {
   display: flex;
   justify-content: flex-end;
 }
 
-.hero__edit {
+.oc__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.oc__delete {
   border: 1px solid var(--color-border);
   background: var(--color-bg-elevated);
   color: var(--color-text);
@@ -373,7 +392,28 @@ onUnmounted(() => {
     background var(--transition-fast);
 }
 
-.hero__edit:hover {
+.oc__delete:hover {
+  border-color: #e03b3b;
+  background: rgba(224, 59, 59, 0.08);
+  color: #e03b3b;
+}
+
+.oc__edit {
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-elevated);
+  color: var(--color-text);
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 14px;
+  padding: 10px 22px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition:
+    border-color var(--transition-fast),
+    background var(--transition-fast);
+}
+
+.oc__edit:hover {
   border-color: var(--color-brand);
   background: var(--color-brand-soft);
 }
@@ -482,7 +522,7 @@ onUnmounted(() => {
 }
 
 @media (max-width: 860px) {
-  .hero {
+  .oc {
     grid-template-columns: 1fr;
   }
 }

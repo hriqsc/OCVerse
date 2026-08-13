@@ -53,3 +53,12 @@ export async function processImageFile(file: File): Promise<File> {
     bitmap.close()
   }
 }
+
+
+export function parseImageSlot(url: string): number {
+  const match = url.match(/\/(\d+)\.[a-zA-Z0-9]+$/)
+  if (!match) {
+    throw new Error(`URL de imagem em formato inesperado: ${url}`)
+  }
+  return Number(match[1])
+}

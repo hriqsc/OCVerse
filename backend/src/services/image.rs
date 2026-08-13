@@ -65,6 +65,29 @@ pub async fn update_images(
     Ok(saved_paths)
 }
 
+pub async fn delete_post_images(
+    user: &str,
+    oc_name: &str,
+    image_repo_path: &str
+) -> Result<(), ApiError> {
+    let safe_user = sanitize_path_segment(user)
+        .map_err(|_| ApiError::BadRequest("invalid user".into()))?;
+
+    let safe_oc_name = sanitize_path_segment(oc_name)
+        .map_err(|_| ApiError::BadRequest("invalid oc_name".into()))?;
+
+    let dir_path = format!("{}/{}/{}", image_repo_path, safe_user, safe_oc_name);
+
+    if let Err(e) = tokio::fs::remove_dir_all(&dir_path).await {
+        error!(path = %dir_path, error = %e, "failed to delete post images");
+        return Err(ApiError::Internal(
+            Error::Other("internal server error".into()).into(),
+        ));
+    }
+
+    Ok(())
+}
+
 
 //id -> /f/v1/user/oc_name/index.png
 pub async fn get_images(

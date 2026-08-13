@@ -71,7 +71,7 @@ export const useOcStore = defineStore('oc', () => {
   const isSaving = ref(false)
   const minified = ref<PostMinified[]>([])
 
-  async function loadInitial() {
+  async function LoadOcs() {
 	isLoading.value = true
 	try {
 	  minified.value = await query_ocs()
@@ -79,7 +79,6 @@ export const useOcStore = defineStore('oc', () => {
 	  isLoading.value = false
 	}
   }
-  loadInitial()
 
   watch(appliedTerm, async (newTerm) => {
 	const term = newTerm.trim().toLowerCase()
@@ -214,6 +213,37 @@ export const useOcStore = defineStore('oc', () => {
 	}
   }
 
+
+  interface DeleteResult {
+      success: boolean
+      error: string
+  }
+  async function deleteOc(id: number): Promise<DeleteResult> {
+    let result : DeleteResult = {success: false, error: ''}
+    try {
+        const response = await authFetch(`/api/v1/post/${id}`, {
+            method: 'DELETE',
+        })
+        result.success = response.ok
+        if (response.status === 404) {
+            result.error = "OC não encontrado."
+        }
+        if (response.status === 500) {
+            result.error = "Um erro inesperado aconteceu."
+        }
+        if (response.status === 400) {
+            result.error = "Usuário sem permissão."
+        }
+    }catch (e) {
+      console.error('Failed to delete oc:', e)
+      result.success = false
+      result.error = "Um erro inesperado aconteceu."
+    }
+
+    console.log(result)
+    return result;
+  }
+
   async function updateOc(id: number, draft: OcDraft): Promise<SaveResult> {
 	const metadata: EditPostMetadata = {
 	  id,
@@ -264,6 +294,8 @@ export const useOcStore = defineStore('oc', () => {
 	getById,
 	addOc,
 	updateOc,
-	minified
+	minified,
+    deleteOc,
+    LoadOcs
   }
 })

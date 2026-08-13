@@ -20,7 +20,7 @@ const placeholderStyle = computed(() => ({
 
 <template>
   <router-link
-    :to="`/hub/oc/${oc.id}`"
+    :to="`/oc/${oc.id}`"
     class="oc-card"
     :style="tapeStyle"
   >

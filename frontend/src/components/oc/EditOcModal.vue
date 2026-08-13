@@ -4,7 +4,7 @@ import type { OcDraft, EditOc, Oc } from '@/types/oc'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 import { useHeightMask } from '@/composables/useHeightMask'
 import { useOcStore } from '@/stores/oc'
-import { processImageFile,ImageProcessingError  } from '@/service/image'
+import { processImageFile,ImageProcessingError,parseImageSlot  } from '@/service/image'
 
 const props = defineProps<{ open: boolean; oc: EditOc }>()
 const emit = defineEmits<{ 'update:open': [value: boolean]; saved: [] }>()
@@ -46,7 +46,10 @@ watch(
       description.value = props.oc.description
       uploadingCount.value = 0
       errorMessages.value = []
-      imageTiles.value = props.oc.images.map(({ slot, url }) => ({ url, originalIndex: slot }))
+      imageTiles.value = props.oc.images.map((url) => ({
+        url,
+        originalIndex: parseImageSlot(url),
+      }))
     } else {
       revokeNewImageUrls()
     }

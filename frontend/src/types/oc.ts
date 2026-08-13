@@ -9,7 +9,7 @@ export interface PostMetadata {
   specie: string
   sex: string
   height: string
-  images: ImageRef[]
+  images: string[]
 }
 
 /** Mirrors the backend's `PostMinified` struct (schema/post.rs). */
@@ -64,11 +64,6 @@ export interface OcDraft {
   existingImageIndexes: number[]
 }
 
-export interface ImageRef {
-  slot: number
-  url: string
-}
-
 /** Shape handed to OcModal when editing an existing OC. */
 export interface EditOc {
   id: number
@@ -77,5 +72,5 @@ export interface EditOc {
   sex: string
   height: string
   description: string
-  images: ImageRef[]
+  images: string[]
 }

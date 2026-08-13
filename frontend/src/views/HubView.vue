@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useOcStore } from '@/stores/oc'
 import { useUserStore } from '@/stores/user'
@@ -12,6 +13,11 @@ const store = useOcStore()
 const userStore = useUserStore()
 const router = useRouter()
 const { openLogin } = useAuthModal()
+
+
+onMounted(() => {
+  store.LoadOcs()
+})
 
 function handleUploadClick() {
   if (userStore.isLoggedIn) {

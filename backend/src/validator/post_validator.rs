@@ -50,7 +50,7 @@ fn validate_description(description : &str) -> &'static str{
 #[inline]
 fn validate_oc_name(oc_name : &str) -> &'static str{
     if oc_name.len() <= 100 &&
-    oc_name.chars().all(char::is_alphanumeric)
+    oc_name.chars().all(valid_char)
     { "" }
     else {"invalid oc_name"}
 }
@@ -58,7 +58,7 @@ fn validate_oc_name(oc_name : &str) -> &'static str{
 #[inline]
 fn validate_specie(specie : &str) -> &'static str{
     if specie.len() <= 50 &&
-    specie.chars().all(char::is_alphanumeric)
+    specie.chars().all(valid_char)
     { ""}
     else {"invalid specie"}
 }
@@ -66,7 +66,7 @@ fn validate_specie(specie : &str) -> &'static str{
 #[inline]
 fn validate_sex(sex : &str) -> &'static str{
     if sex.len() == 1 &&
-    (sex == "S" || sex == "M" || sex == "O")
+    (sex == "F" || sex == "M" || sex == "O")
     {""}
     else {"invalid sex"}
 }
@@ -78,4 +78,11 @@ fn validate_height(height : &str) -> &'static str{
     height.chars().all(char::is_numeric)
     {""}
     else {"invalid height"}
+}
+
+
+
+#[inline]
+fn valid_char(c : char) -> bool{
+    c.is_alphanumeric() || c == ' '
 }

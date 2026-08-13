@@ -7,13 +7,14 @@
 
 -- posts
  - ver posts no hub [V]
- - criar post [V]
+ - criar post [V] 
+ - ver post ao ser criado[V]
  - ver post criado (dando refresh na pagina) [V]
- - conseguir editar seu proprio post[]
- - tentar editar post de outra pessoa[]
- - pesquisar post []
-
+ - conseguir editar seu proprio post[V]
+ - tentar editar post de outra pessoa[V]
+ - pesquisar post [V]
+ - deletar post [V]
 
 
 TODO:
- - quando for enviar a image, passar por um tratamento
+ - quando for enviar a image, passar por um tratamento [V]
