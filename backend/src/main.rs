@@ -3,6 +3,7 @@ use tracing::{info, error};
 use crate::appstate::AppState;
 use std::env;
 use actix_cors::Cors;
+use tracing_subscriber::{EnvFilter, Registry, fmt, prelude::*};
 
 mod endpoints;
 mod appstate;
@@ -18,9 +19,11 @@ mod validator;
 
 #[tokio::main]
 async fn main() {
+
+    let _guard = config_tracing();
+
     let port = env::var("BACKEND_PORT").unwrap_or_else(|_| "3000".to_string());
     let address = format!("0.0.0.0:{}", port);
-
     let app_state = AppState::new().await.unwrap();
 
     let frontend_origin = env::var("FRONTEND_URL")
@@ -81,4 +84,27 @@ async fn run(
     .await?;
 
     Ok(())
+}
+
+#[inline]
+fn config_tracing() -> tracing_appender::non_blocking::WorkerGuard {
+    let file_appender = tracing_appender::rolling::weekly("/logs", "app.log");
+
+    let filter = EnvFilter::new(
+        "actix_http=info,actix_http=warn,actix_server=warn,mio=warn"
+    );
+
+    let (non_blocking, guard) =
+        tracing_appender::non_blocking(file_appender);
+
+    let file_layer = fmt::layer()
+        .with_ansi(false)
+        .with_writer(non_blocking);
+
+    Registry::default()
+        .with(filter)
+        .with(file_layer)
+        .init();
+
+    guard
 }

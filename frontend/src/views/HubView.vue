@@ -66,7 +66,7 @@ function handleUploadClick() {
   background-size: cover;
   background-position: center;
   background-repeat: no-repeat;
-  opacity: 0.15;
+  opacity: 0.05;
   z-index: -1;
 }
 

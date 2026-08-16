@@ -10,7 +10,7 @@ const userStore = useUserStore()
   <header class="app-header">
     <div class="app-header__inner">
       <router-link to="/hub" class="brand">
-        <img src="/logo.svg" alt="OC Verse logo" class="brand__mark" />
+        <img src="/logo.png" alt="OC Verse logo" class="brand__mark" />
         <span class="brand__text">
           <span class="brand__name">OC Verse</span>
         </span>

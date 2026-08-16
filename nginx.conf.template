@@ -4,7 +4,6 @@ server {
     root /usr/share/nginx/html;
     index index.html;
 
-    # Gzip - reduz tráfego, bom pra CPU/rede limitados
     gzip on;
     gzip_comp_level 5;
     gzip_min_length 256;
@@ -12,8 +11,8 @@ server {
                text/xml application/xml application/xml+rss text/javascript
                image/svg+xml font/woff2;
 
-    # Cache agressivo pros assets com hash no nome (Vite/Webpack build)
-    location ~* \.(?:css|js|woff2?|ttf|svg|png|jpg|jpeg|gif|ico)$ {
+    # agressive cache
+    location ~* \.(?:css|js|woff2?|ttf|svg|jpg|jpeg|gif|ico)$ {
         expires 30d;
         add_header Cache-Control "public, immutable";
         try_files $uri =404;
@@ -24,12 +23,11 @@ server {
         try_files $uri $uri/ /index.html;
     }
     
+    #image repository
     location ^~ /f/v1/ {
         alias /usr/share/nginx/images/;
-        
-        expires 1y;
-        
-        add_header Cache-Control "public, max-age=31536000, immutable";
+        expires -1;
+        add_header Cache-Control "no-cache";
     }
 
     location ^~ /images/ {

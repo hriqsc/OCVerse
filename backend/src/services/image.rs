@@ -54,7 +54,7 @@ pub async fn update_images(
             });
         } else if !is_existing[slot] {
             delete_futs.push(async move {
-                let _ = tokio::fs::remove_file(&file_path).await; // ok se não existir
+                let _ = tokio::fs::remove_file(&file_path).await;
             });
         }
     }

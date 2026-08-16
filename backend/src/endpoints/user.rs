@@ -82,7 +82,7 @@ pub async fn create_user(
             ApiError::Internal(Error::Other("internal server error".into()))
         })?;
 
-    info!(user_name = %user_req.user_name, "user registered successfully");
+    info!(user_name = %user_req.user_name, "user registered");
 
     Ok(HttpResponse::Created().body(""))
 }
@@ -169,8 +169,6 @@ pub async fn login_user(
         .path("/api/v1")
         .finish();
 
-    info!(user_name = %login_req.user_name, "user logged in successfully");
-
     Ok(HttpResponse::Ok()
         .cookie(refresh_cookie)
         .json(serde_json::json!({ "access_token": access_token })))
@@ -200,8 +198,6 @@ pub async fn logout_user(
         .max_age(CookieDuration::seconds(0))
         .path("/api/v1")
         .finish();
-
-    info!("user logged out successfully");
 
     Ok(HttpResponse::Ok()
         .cookie(expired_cookie)
@@ -257,8 +253,6 @@ pub async fn refresh_token(
         .max_age(CookieDuration::days(7))
         .path("/api/v1")
         .finish();
-
-    info!(user_name = %user_name, "access token refreshed successfully");
 
     Ok(HttpResponse::Ok()
         .cookie(refresh_cookie)

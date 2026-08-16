@@ -11,6 +11,7 @@
  - ver post ao ser criado[V]
  - ver post criado (dando refresh na pagina) [V]
  - conseguir editar seu proprio post[V]
+    - tentar alterar as imagens[]
  - tentar editar post de outra pessoa[V]
  - pesquisar post [V]
  - deletar post [V]

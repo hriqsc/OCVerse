@@ -140,8 +140,8 @@ onUnmounted(() => {
           </dl>
 
           <div v-if="isOwner" class="oc__actions">
-            <button type="button" class="oc__edit" @click="isEditOpen = true">Editar</button>
-            <button type="button" class="oc__delete" @click="confirmDelete">Excluir</button>
+            <button type="button" class="oc__btn" @click="isEditOpen = true">Editar</button>
+            <button type="button" class="oc__btn" @click="confirmDelete">Excluir</button>
           </div>
         </aside>
       </section>
@@ -214,7 +214,7 @@ onUnmounted(() => {
   background-size: cover;
   background-position: center;
   background-repeat: no-repeat;
-  opacity: 0.05; /* ajuste esse valor até ficar do jeito que quiser */
+  opacity: 0.03;
   z-index: -1;
 }
 
@@ -377,7 +377,7 @@ onUnmounted(() => {
   gap: 10px;
 }
 
-.oc__delete {
+.oc__btn {
   border: 1px solid var(--color-border);
   background: var(--color-bg-elevated);
   color: var(--color-text);
@@ -392,28 +392,7 @@ onUnmounted(() => {
     background var(--transition-fast);
 }
 
-.oc__delete:hover {
-  border-color: #e03b3b;
-  background: rgba(224, 59, 59, 0.08);
-  color: #e03b3b;
-}
-
-.oc__edit {
-  border: 1px solid var(--color-border);
-  background: var(--color-bg-elevated);
-  color: var(--color-text);
-  font-family: var(--font-display);
-  font-weight: 600;
-  font-size: 14px;
-  padding: 10px 22px;
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-  transition:
-    border-color var(--transition-fast),
-    background var(--transition-fast);
-}
-
-.oc__edit:hover {
+.oc__btn:hover {
   border-color: var(--color-brand);
   background: var(--color-brand-soft);
 }

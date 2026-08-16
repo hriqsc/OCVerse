@@ -269,20 +269,19 @@ where
             //will read through the chunks of data and build the images
             "images" => {
                 if images.len() >= MAX_IMAGES {
-                    warn!(count = images.len(), "too many images in request");
-                    return Err(ApiError::BadRequest("invalid request".into()));
+                    continue;
                 }
 
                 let mut bytes = Vec::new();
                 while let Some(chunk) = field.next().await {
                     let chunk = chunk.map_err(|e| {
                         error!(error = %e, "failed to read image chunk");
-                        ApiError::BadRequest("invalid request".into())
+                        ApiError::BadRequest("failed to read image".into())
                     })?;
 
                     if bytes.len() + chunk.len() > MAX_IMAGE_BYTES {
                         warn!("image exceeds max allowed size");
-                        return Err(ApiError::BadRequest("invalid request".into()));
+                        return Err(ApiError::BadRequest("image exceeds max allowed size".into()));
                     }
 
                     bytes.extend_from_slice(&chunk);
