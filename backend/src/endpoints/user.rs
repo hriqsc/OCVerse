@@ -163,7 +163,7 @@ pub async fn login_user(
 
     let refresh_cookie = Cookie::build("refresh_token", session.refresh_token.clone())
         .http_only(true)
-        .secure(true)
+        // .secure(true) fuck you tails
         .same_site(SameSite::Strict)
         .max_age(CookieDuration::days(7))
         .path("/api/v1")
@@ -193,7 +193,7 @@ pub async fn logout_user(
     // expire client cookie
     let expired_cookie = Cookie::build("refresh_token", "")
         .http_only(true)
-        .secure(true)
+        // .secure(true)
         .same_site(SameSite::Strict)
         .max_age(CookieDuration::seconds(0))
         .path("/api/v1")
@@ -248,7 +248,7 @@ pub async fn refresh_token(
 
     let refresh_cookie = Cookie::build("refresh_token", session.refresh_token.clone())
         .http_only(true)
-        .secure(true)
+        // .secure(true)
         .same_site(SameSite::Strict)
         .max_age(CookieDuration::days(7))
         .path("/api/v1")

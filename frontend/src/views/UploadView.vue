@@ -5,6 +5,8 @@ import AppHeader from '@/components/layout/AppHeader.vue'
 import { useOcStore } from '@/stores/oc'
 import { useUserStore } from '@/stores/user'
 import { useHeightMask } from '@/composables/useHeightMask'
+import {useImagePicker} from '@/composables/useImagePicker'
+import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 
 const router = useRouter()
 const store = useOcStore()
@@ -16,15 +18,17 @@ const sex = ref('')
 const height = useHeightMask()
 const description = ref('')
 const fileInput = ref<HTMLInputElement>()
-const errorMessages = ref<string[]>([])
 
 const MAX_IMAGES = 4
 
-interface ImageTile {
-  url: string
-  file: File
-}
-const imageTiles = ref<ImageTile[]>([])
+const {
+  imageTiles,
+  uploadingCount,
+  errorMessages,
+  handleFiles,
+  removeImage,
+  clearErrors,
+} = useImagePicker(MAX_IMAGES)
 
 function revokeImageUrls() {
   imageTiles.value.forEach((tile) => URL.revokeObjectURL(tile.url))
@@ -35,25 +39,8 @@ function triggerFilePicker() {
   fileInput.value?.click()
 }
 
-function handleFiles(event: Event) {
-  const files = (event.target as HTMLInputElement).files
-  if (!files) return
-  const remaining = MAX_IMAGES - imageTiles.value.length
-  Array.from(files)
-    .slice(0, remaining)
-    .forEach((file) => {
-      imageTiles.value.push({ url: URL.createObjectURL(file), file })
-    })
-  ;(event.target as HTMLInputElement).value = ''
-}
-
-function removeImage(index: number) {
-  const [tile] = imageTiles.value.splice(index, 1)
-  if (tile) URL.revokeObjectURL(tile.url)
-}
-
 async function submit() {
-  errorMessages.value = []
+  clearErrors()
 
   const result = await store.addOc({
     oc_name: name.value.trim() || 'Nome do oc',
@@ -61,7 +48,7 @@ async function submit() {
     sex: sex.value.trim(),
     height: height.raw.value,
     description: description.value.trim(),
-    newImages: imageTiles.value.map((tile) => tile.file),
+    newImages: imageTiles.value.map((tile) => tile.file as File),
     existingImageIndexes: [],
   })
 
@@ -123,26 +110,24 @@ async function submit() {
           <span>Upload:</span>
           <div class="image-picker">
             <div v-for="(tile, index) in imageTiles" :key="tile.url" class="image-picker__tile">
-              <img :src="tile.url" alt="" />
-              <button
-                type="button"
-                class="image-picker__remove"
-                aria-label="Remover imagem"
-                @click="removeImage(index)"
-              >
+                <img :src="tile.url" alt="" />
+                <button type="button" class="image-picker__remove" aria-label="Remover imagem" @click="removeImage(index)">
                 ✕
-              </button>
+                </button>
+            </div>
+            <div v-for="n in uploadingCount" :key="`uploading-${n}`" class="image-picker__tile image-picker__tile--loading">
+                <LoadingSpinner size="sm" label="" />
             </div>
             <button
-              v-if="imageTiles.length < MAX_IMAGES"
-              type="button"
-              class="image-picker__add"
-              @click="triggerFilePicker"
+                v-if="imageTiles.length + uploadingCount < MAX_IMAGES"
+                type="button"
+                class="image-picker__add"
+                @click="triggerFilePicker"
             >
-              <span aria-hidden="true">＋</span>
-              Adicionar
+                <span aria-hidden="true">＋</span>
+                Adicionar
             </button>
-          </div>
+            </div>
           <input
             ref="fileInput"
             type="file"

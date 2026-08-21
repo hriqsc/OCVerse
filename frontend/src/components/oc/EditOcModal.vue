@@ -5,35 +5,32 @@ import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 import { useHeightMask } from '@/composables/useHeightMask'
 import { useOcStore } from '@/stores/oc'
 import { processImageFile,ImageProcessingError,parseImageSlot  } from '@/service/image'
+import {useImagePicker} from '@/composables/useImagePicker'
 
 const props = defineProps<{ open: boolean; oc: EditOc }>()
 const emit = defineEmits<{ 'update:open': [value: boolean]; saved: [] }>()
+const MAX_IMAGES = 4
+
+const {
+  imageTiles,
+  uploadingCount,
+  errorMessages,
+  handleFiles,
+  removeImage,
+  reset: resetImages,
+  clearErrors,
+  revokeNewImageUrls,
+} = useImagePicker(MAX_IMAGES)
 
 const store = useOcStore()
 
-const MAX_IMAGES = 4
 const fileInput = ref<HTMLInputElement>()
-const uploadingCount = ref(0)
-const errorMessages = ref<string[]>([])
 
 const name = ref(props.oc.oc_name)
 const specie = ref(props.oc.specie)
 const sex = ref(props.oc.sex)
 const height = useHeightMask(props.oc.height)
 const description = ref(props.oc.description)
-
-interface ImageTile {
-  url: string
-  file?: File
-  originalIndex?: number
-}
-const imageTiles = ref<ImageTile[]>([])
-
-function revokeNewImageUrls() {
-  imageTiles.value.forEach((tile) => {
-    if (tile.file) URL.revokeObjectURL(tile.url)
-  })
-}
 
 watch(
   () => props.open,
@@ -44,12 +41,7 @@ watch(
       sex.value = props.oc.sex
       height.reset(props.oc.height)
       description.value = props.oc.description
-      uploadingCount.value = 0
-      errorMessages.value = []
-      imageTiles.value = props.oc.images.map((url) => ({
-        url,
-        originalIndex: parseImageSlot(url),
-      }))
+      resetImages(props.oc.images)
     } else {
       revokeNewImageUrls()
     }
@@ -66,38 +58,8 @@ function triggerFilePicker() {
   fileInput.value?.click()
 }
 
-function handleFiles(event: Event) {
-  const files = (event.target as HTMLInputElement).files
-  if (!files) return
-  const remaining = MAX_IMAGES - imageTiles.value.length
-  const toProcess = Array.from(files).slice(0, remaining)
-
-  toProcess.forEach((file) => {
-    uploadingCount.value++
-    processImageFile(file)
-      .then((processed) => {
-        const url = URL.createObjectURL(processed)
-        imageTiles.value.push({ url, file: processed })
-      })
-      .catch((e) => {
-        const message =
-          e instanceof ImageProcessingError ? e.message : 'Não foi possível processar esta imagem.'
-        errorMessages.value = [...errorMessages.value, `${file.name}: ${message}`]
-      })
-      .finally(() => {
-        uploadingCount.value--
-      })
-  })
-  ;(event.target as HTMLInputElement).value = ''
-}
-
-function removeImage(index: number) {
-  const [tile] = imageTiles.value.splice(index, 1)
-  if (tile?.file) URL.revokeObjectURL(tile.url)
-}
-
 async function save() {
-  errorMessages.value = []
+  clearErrors()
 
   const draft: OcDraft = {
     oc_name: name.value.trim() || 'Nome do oc',

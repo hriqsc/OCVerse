@@ -1,3 +1,5 @@
+use std::fs;
+
 use actix_multipart::Multipart;
 use actix_web::{HttpResponse, get, post, put, web,delete};
 use futures_util::StreamExt;
@@ -10,7 +12,16 @@ use sqlx::QueryBuilder;
 use crate::{
     api_error::ApiError, appstate::AppState, error::Error, middleware::auth::AuthUser, schemas::{
         post::{CreatePost, EditPost, PostMetadata, PostMinified}, query::PostQuery
-    }, services::image::{MAX_IMAGES, delete_post_images, get_images, get_thumb, update_images}, validator::post_validator::{
+    }, services::{
+        image::{
+            MAX_IMAGES, 
+            delete_post_images,
+            get_images,
+            get_thumb,
+            update_images
+        },
+        db::get_post_from_db
+    }, validator::post_validator::{
         validate_post_create_post,
         validate_post_edit_post
     }
@@ -106,22 +117,28 @@ pub async fn update_post(
         return Err(ApiError::BadRequest(validation));
     }
 
-    //checks if the user is the creator of the post
-    let post_id: Option<i32> = sqlx::query_scalar(
-        "SELECT id FROM posts WHERE id = $1 AND creator_user_name = $2"
-    )
-        .bind(&metadata.id)
-        .bind(&auth.user_name)
-        .fetch_optional(&state.db)
-        .await
-        .map_err(|e| {
-            error!(error = %e, "failed to check if user is creator of post");
-            ApiError::Internal(Error::Other("internal server error".into()))
-        })?;
+    let old_post = get_post_from_db(
+        &metadata.id,
+        &state.db,
+        &state.image_repo_path,
+        false
+    ).await?;
 
-    let Some(_post_id) = post_id else {
-        return Err(ApiError::UnAuthorized("unauthorized".into()));
-    };
+    if old_post.creator_user_name != auth.user_name {
+        return Err(ApiError::UnAuthorized("".into()));
+    }
+
+    if old_post.oc_name != metadata.oc_name{
+        let old_path = format!("{}/{}/{}", state.image_repo_path, auth.user_name, old_post.oc_name);
+        let new_path = format!("{}/{}/{}", state.image_repo_path, auth.user_name, metadata.oc_name);
+        match fs::rename(old_path, new_path){
+            Ok(_) => (),
+            Err(e) => {
+                error!(error = %e, "failed to rename directory");
+                return Err(ApiError::Internal(Error::Other("internal server error".into())));
+            }
+        };
+    }
 
     update_images(
         &auth.user_name,
@@ -403,7 +420,7 @@ pub async fn get_post(
 
 
     let post_metadata = match post{
-        Some(row) => PostMetadata::from_row(row, &state.image_repo_path).await?,
+        Some(row) => PostMetadata::from_row(row, &state.image_repo_path, true).await?,
         None => return Err(ApiError::NotFound("post not found".into()))
     };
     

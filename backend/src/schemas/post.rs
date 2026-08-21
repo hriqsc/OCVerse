@@ -50,15 +50,22 @@ pub struct EditPost{
 
 impl PostMetadata{
     pub async fn from_row(
-        row : sqlx::sqlite::SqliteRow, image_repo_path : &str
+        row : sqlx::sqlite::SqliteRow, 
+        image_repo_path : &str,
+        search_images : bool
     ) -> Result<PostMetadata, Error> {
+
         let user_name : String = row.try_get("creator_user_name")?;
         let oc_name : String = row.try_get("oc_name")?;
-        let images = get_images(
-            &user_name,
-            &oc_name,
-            image_repo_path
-        ).await?;
+        let images = if search_images{ 
+            get_images(
+                &user_name,
+                &oc_name,
+                image_repo_path
+            ).await?
+        } else {Vec::new()}
+        
+        ;
 
         Ok(PostMetadata {
             id : row.try_get("id")?,

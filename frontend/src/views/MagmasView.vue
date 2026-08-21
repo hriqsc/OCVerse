@@ -15,7 +15,7 @@ interface MagmaCard {
 const magmas = ref<MagmaCard[]>([])
 
 /**
- * Extrai o id do canvas a partir da URL do magma.
+ * Extracts the canvas id from the url.
  * Ex: https://magma.com/d/U5Qo6tcUP1 -> "U5Qo6tcUP1"
  */
 function extractCanvasId(url: string): string {
@@ -29,27 +29,21 @@ function extractCanvasId(url: string): string {
 }
 
 /**
- * Monta a url da thumbnail a partir do id do canvas.
+ * creates the thumbnail url from the canvas id.
  */
 function buildThumbnailUrl(id: string): string {
   return `https://magma.com/${id}.thumbnail.png`
 }
 
 /**
- * Remove o sufixo " | Magma" do título da página.
+ * Removes " | Magma" from the page title.
  */
 function stripBrandSuffix(rawTitle: string): string {
   return rawTitle.replace(/\s*\|\s*Magma\s*$/i, '').trim()
 }
 
 /**
- * Busca o <title> da página do magma.
- *
- * OBS: buscar o HTML de magma.com diretamente do navegador só funciona
- * se o domínio liberar CORS para essa rota. Se não for o caso, troque
- * este fetch por uma chamada ao seu próprio backend, algo como:
- *   GET /api/magma/title?url=<url>
- * que faz o fetch no servidor e devolve só o título já tratado.
+ * Gets the title of the magma page.
  */
 async function fetchMagmaTitle(url: string): Promise<string> {
   const response = await fetch(url)

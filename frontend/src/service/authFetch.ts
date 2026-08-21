@@ -15,7 +15,6 @@ export async function authFetch(url: string, options: RequestInit = {}): Promise
 
   let response = await doFetch()
 
-  // access token expirado -> tenta refresh e refaz a request uma vez
   if (response.status === 401) {
     const refreshed = await userStore.refresh()
     if (refreshed) {
