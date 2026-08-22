@@ -57,18 +57,18 @@ interface MagmaList{
     magmas_id: string[]
 }
 
-async function get_magmas() : Promise<string[]>{
-    try{
-        const response = await fetch("/api/v1/magmas");
-        if (!response.ok) {
-            throw new Error(`HTTP error! Status: ${response.status}`);
-        }
-        return ((await response.json()) as MagmaList).magmas_id;
-
-    } catch (e) {
-        console.error("Failed to fetch magmas:", e);
+async function get_magmas(): Promise<string[]> {
+  try {
+    const response = await fetch("/api/v1/magmas");
+    if (!response.ok) {
+      throw new Error(`HTTP error! Status: ${response.status}`);
     }
-    return []
+    const ids = ((await response.json()) as MagmaList).magmas_id;
+    return ids.map((id) => `https://magma.com/d/${id}`);
+  } catch (e) {
+    console.error("Failed to fetch magmas:", e);
+  }
+  return [];
 }
 
 onMounted(async () => {

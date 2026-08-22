@@ -50,7 +50,7 @@ fn validate_description(description : &str) -> &'static str{
 #[inline]
 fn validate_oc_name(oc_name : &str) -> &'static str{
     if oc_name.len() <= 100 &&
-    oc_name.chars().all(valid_char)
+    oc_name.chars().all(valid_name)
     { "" }
     else {"invalid oc_name"}
 }
@@ -84,5 +84,23 @@ fn validate_height(height : &str) -> &'static str{
 
 #[inline]
 fn valid_char(c : char) -> bool{
-    c.is_alphanumeric() || c == ' '
+    c.is_alphanumeric() 
+    || c == ' '  || c == '-'  || c == '.' 
+    || c == '_'  || c == '\'' || c == '(' 
+    || c == ')'  || c == '!'  || c == '*'
+    || c == '@'  || c == '#'  || c == '$'
+    || c == '%'  || c == '^'  || c == '&'
 }
+
+#[inline]
+fn valid_name(c : char) -> bool{
+    c.is_alphanumeric() 
+    || c == ' ' || c == '-' || c == '_' 
+    || c == '(' || c == ')' || c == '!'
+    || c == '@' || c == '#' || c == '$'
+    || c == '%' || c == '^' || c == '&'
+    || c == '*'
+}
+
+// #[inline]
+// )

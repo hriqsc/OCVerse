@@ -81,6 +81,11 @@ onMounted(() => {
 onUnmounted(() => {
   window.removeEventListener('keydown', handleKeydown)
 })
+
+function WriteHeight(height: string | undefined): string {
+    if (!height) return "Indefinida";
+    return `${height[0]},${height[1]}${height[2]} M`;
+}
 </script>
 
 <template>
@@ -131,7 +136,7 @@ onUnmounted(() => {
             </div>
             <div class="oc__fact">
               <dt>Altura:</dt>
-              <dd>{{ oc.height || '—' }}</dd>
+              <dd>{{ WriteHeight(oc.height) }}</dd>
             </div>
             <div class="oc__fact oc__fact--block">
               <dt>Descrição:</dt>
