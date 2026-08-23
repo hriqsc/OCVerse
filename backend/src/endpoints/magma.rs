@@ -1,33 +1,28 @@
 use actix_web::{HttpRequest, HttpResponse, get, post, web};
-use tracing::error;
+use tracing::{error, warn};
+use crate::{
+    api_error::ApiError,
+    appstate::AppState,
+    error::Error,
+    shared::{
+        encrypt::fnv1a_hash,
+        helpers::get_value_from_header
+    },
+    schemas::magma::MagmaInsert
+};
+use actix_cors::Cors;
 
-use crate::{api_error::ApiError, appstate::AppState, error::Error, shared::{encrypt::fnv1a_hash, helpers::get_value_from_header}};
-
-
+#[inline]
 fn generic_response() -> ApiError {
     ApiError::UnAuthorized("unauthorized".into())
 }
 
-#[post("/api/v1/magma")]
+#[post("/api/v1/magma", wrap = "Cors::permissive()")]
 pub async fn new_magma(
     state: web::Data<AppState>,
     req: HttpRequest,
     req_body: String
 ) -> Result<HttpResponse, ApiError> {
-
-
-    if req_body.trim().is_empty() {
-        return Err(generic_response());
-    }
-
-    //expected json:
-    /*
-        header: <secret_code (String)>
-        {"url":"<String>"}
-     */
-    if &req_body[2..5] != "url" {
-        return Err(generic_response());
-    }
 
     let secret = fnv1a_hash(
         get_value_from_header("secret", &req)?.as_bytes()
@@ -37,27 +32,30 @@ pub async fn new_magma(
         return Err(generic_response());
     }
 
-    let id : String = 
-            req_body.chars()
-                    .skip(8)
-                    .take(req_body.len() - 2).collect();
+    let new_magma : MagmaInsert = match serde_json::from_str(&req_body){
+        Ok(magma) => magma,
+        Err(e) => {
+            warn!(error = %e, "malformed json received on register");
+            return Err(ApiError::BadRequest("invalid request".into()));
+        }
+    };
 
-    if id.len() < 1 || id.len() > 20 {
+    if new_magma.url.len() < 1 || new_magma.url.len() > 20 {
         return Err(generic_response());
     }
-    
-    let time_stamp = chrono::Utc::now().timestamp();
 
     sqlx::query(
         "INSERT INTO magmas (id, created_at) VALUES ($1, $2)"
     )
-    .bind(id)
-    .bind(time_stamp)
+    .bind(new_magma.url)
+    .bind(new_magma.time_stamp)
     .execute(&state.db)
     .await
     .map_err(|e| {
         error!(error = %e, "database error while creating new magma");
-        ApiError::Internal(Error::Other("internal server error".into()))
+        ApiError::Internal(
+            Error::Other("internal server error".into())
+        )
     })?;
     
     Ok(HttpResponse::Ok().json(""))
@@ -71,9 +69,8 @@ pub async fn list_magmas(
     state: web::Data<AppState>,
 ) -> Result<HttpResponse, ApiError> {
     let magmas: Vec<String> = sqlx::query_scalar(
-        "SELECT id FROM magmas ORDER BY created_at DESC LIMIT ?"
+        "SELECT id FROM magmas ORDER BY created_at DESC"
     )
-    .bind(20)
     .fetch_all(&state.db)
     .await?;
 

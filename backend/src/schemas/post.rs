@@ -34,7 +34,6 @@ pub struct CreatePost{
     pub height : String,
 }
 
-
 #[derive(Debug, Serialize, Deserialize)]
 pub struct EditPost{
     pub id : i32,
@@ -45,8 +44,6 @@ pub struct EditPost{
     pub height : String,
     pub existing_images : Vec<i32>
 }
-
-
 
 impl PostMetadata{
     pub async fn from_row(
@@ -63,9 +60,7 @@ impl PostMetadata{
                 &oc_name,
                 image_repo_path
             ).await?
-        } else {Vec::new()}
-        
-        ;
+        } else {Vec::new()};
 
         Ok(PostMetadata {
             id : row.try_get("id")?,
@@ -77,6 +72,5 @@ impl PostMetadata{
             height : row.try_get("height")?,
             images : images,
         })
-
     }
 }

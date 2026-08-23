@@ -1,9 +1,8 @@
-use actix_web::{HttpResponse, cookie::SameSite, post, web};
+use actix_web::{HttpResponse, cookie::SameSite, get, post, web};
 use sqlx::Row;
 use tracing::{error, warn, info, instrument};
 use crate::{
-    api_error::ApiError, appstate::AppState, error::Error, schemas::user::
-            UserLogin, services::{
+    api_error::ApiError, appstate::AppState, error::Error, schemas::user::{UserLogin, UserResetPassword}, services::{
                 jwt::generate_access_token, session::{
                     new_session, revoke_session, validate_refresh_token
                 }
@@ -127,7 +126,7 @@ pub async fn login_user(
             // verify_password's timing consistent with the real-user path
             if let Ok(dummy_hash) = PasswordHash::new(
                 "$argon2id$v=19$m=8192,t=2,p=1$c29tZXNhbHQ$RdescudvJCsgt3ub+b+dWRWJTmaaJObG"
-            ) {
+            ){
                 let _ = state.argon2.verify_password(b"dummy", &dummy_hash);
             }
             warn!(user_name = %login_req.user_name, "login attempt for nonexistent user");
@@ -262,10 +261,82 @@ pub async fn refresh_token(
         })))
 }
 
+#[get("/api/v1/user/reset/{id}")]
+pub async fn check_reset_id(
+    state: web::Data<AppState>,
+    id: web::Path<i32>,
+) -> Result<HttpResponse, ApiError> {
+    let exist = sqlx::query(
+        "SELECT id FROM reset_logins WHERE id = $1"
+    )
+    .bind(&id.into_inner())
+    .fetch_optional(&state.db)
+    .await
+    .map_err(|e| {
+        error!(error = %e, "failed to fetch reset login");
+        ApiError::Internal(Error::Other("internal server error".into()))
+    })?;
+
+    match exist {
+        Some(_) => Ok(HttpResponse::Ok().json("")),
+        None => Err(ApiError::NotFound("not found".into())),
+    }
+}
 
 
+#[post("/api/v1/user/reset")]
+pub async fn reset_login(
+    state: web::Data<AppState>,
+    new_login : web::Json<UserResetPassword>
+) -> Result<HttpResponse,ApiError>{
 
+    let user_name = sqlx::query("SELECT user_name FROM reset_logins WHERE id = $1")
+    .bind(&new_login.id)
+    .fetch_optional(&state.db)
+    .await
+    .map_err(|e| {
+        error!(error = %e, "failed to fetch user_name");
+        ApiError::Internal(Error::Other("internal server error".into()))
+    })?
+    .ok_or_else(|| ApiError::NotFound("not found".into()))?;
 
-//===============================public api===============================
+    let user_name : String = user_name.try_get("user_name")?;
 
+    let salt = SaltString::generate(&mut OsRng);
 
+    let hash_password = state.argon2
+        .hash_password(new_login.new_password.as_bytes(), &salt)
+        .map_err(|e| {
+            error!(error = %e, "failed to hash password");
+            ApiError::Internal(Error::Other("internal server error".into()))
+        })?
+        .to_string();
+
+    sqlx::query("
+        UPDATE users
+        SET password_hash = $1
+        WHERE user_name = $2
+    ")
+        .bind(&hash_password)
+        .bind(&user_name)
+        .execute(&state.db)
+        .await
+        .map_err(|e| {
+            error!(error = %e, "failed to update password");
+            ApiError::Internal(Error::Other("internal server error".into()))
+        })?;
+
+    sqlx::query("
+        DELETE FROM reset_logins
+        WHERE id = $1
+    ")
+        .bind(&new_login.id)
+        .execute(&state.db)
+        .await
+        .map_err(|e| {
+            error!(error = %e, "failed to delete reset login");
+            ApiError::Internal(Error::Other("internal server error".into()))
+        })?;
+        
+    Ok(HttpResponse::Ok().json(""))
+}

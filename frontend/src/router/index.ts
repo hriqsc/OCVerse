@@ -14,6 +14,11 @@ const router = createRouter({
       component: () => import('@/views/HubView.vue'),
     },
     {
+        path: '/reset/:id',
+        name: 'reset',
+        component: () => import('@/views/ResetLogin.vue'),
+    },
+    {
       path: '/hub/upload',
       name: 'oc-upload',
       component: () => import('@/views/UploadView.vue'),

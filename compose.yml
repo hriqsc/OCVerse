@@ -28,7 +28,7 @@ services:
     entrypoint: ["/app/backend"]
     environment:
       - RUST_BACKTRACE="1"
-      - RUST_LOG="info"
+      - RUST_LOG=info,actix_web=info
     ports:
       - "${BACKEND_PORT}:${BACKEND_PORT}"
     networks:

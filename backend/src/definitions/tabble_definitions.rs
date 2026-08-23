@@ -36,10 +36,18 @@ pub fn session_table_def() -> &'static str {
     )"
 }
 
+pub fn reset_login_table_def() -> &'static str {
+    "CREATE TABLE IF NOT EXISTS reset_logins (
+        id INTEGER PRIMARY KEY,
+        user_name CHAR(20) NOT NULL
+    )"
+}
+
 pub async fn run_tables_defs(pool : &sqlx::Pool<sqlx::Sqlite>) -> Result<(), sqlx::Error> {
     sqlx::query(user_table_def()).execute(pool).await?;
     sqlx::query(post_table_def()).execute(pool).await?;
     sqlx::query(magma_table_def()).execute(pool).await?;
     sqlx::query(session_table_def()).execute(pool).await?;
+    sqlx::query(reset_login_table_def()).execute(pool).await?;
     Ok(())
 }
