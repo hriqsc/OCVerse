@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 500" width="100%" height="100%">
+
+  <g fill="#d8d5e8" stroke="#dad4e8">
+    <!-- Núcleo Central (Formato de "O" inclinado) -->
+    <path d="M 270,105 
+             C 365,115 425,200 410,295 
+             C 395,385 305,445 205,420 
+             C 125,400 90,305 115,220 
+             C 135,150 195,100 270,105 Z 
+             M 255,185 
+             C 215,185 185,225 180,270 
+             C 175,315 205,345 245,345 
+             C 285,345 315,305 320,260 
+             C 325,215 295,185 255,185 Z" 
+          fill-rule="evenodd" stroke="none"/>
+
+    <!-- Órbita 1 (Vertical / Inclinada para a direita) -->
+    <path d="M 205,35 
+             A 120,220 15 1,1 425,355" 
+          fill="none" stroke-width="8" stroke-linecap="round" />
+    <!-- Elétron 1 (Topo) -->
+    <circle cx="295" cy="40" r="15" stroke="none" />
+
+    <!-- Órbita 2 (Inclinada para baixo à direita) -->
+    <path d="M 125,105 
+             A 220,115 -35 1,0 445,320" 
+          fill="none" stroke-width="8" stroke-linecap="round" />
+    <!-- Elétron 2 (Inferior Direito) -->
+    <circle cx="380" cy="400" r="22" stroke="none" />
+
+    <!-- Órbita 3 (Inclinada para a esquerda) -->
+    <path d="M 165,420 
+             A 210,125 35 1,1 100,160" 
+          fill="none" stroke-width="8" stroke-linecap="round" />
+    <!-- Elétron 3 (Esquerda) -->
+    <circle cx="65" cy="305" r="18" stroke="none" />
+  </g>
+</svg>
