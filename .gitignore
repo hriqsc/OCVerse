@@ -74,6 +74,4 @@ test_output.txt
 
 #wsl stuff
 *:Zone.Identifier
-
-data/images
-data/db
+data
